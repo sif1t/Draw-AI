@@ -1,1 +1,10 @@
-{"original_path": "C:\\Users\\Arifeen\\Desktop\\Draw AI\\server\\uploads\\test_image.jpg", "sketch_path": "temp\\sketch_test123.jpg", "paid": false}
+{
+    "paid":  false,
+    "cancel_url":  "http://localhost:5000/api/payment-cancel?session_id=test123",
+    "sketch_path":  "c:\\Users\\Arifeen\\Desktop\\Draw AI\\server\\temp\\sketch_test.jpg",
+    "amount":  1,
+    "status":  "pending",
+    "created":  "2025-06-25T18:03:51.6786006+06:00",
+    "original_path":  "c:\\Users\\Arifeen\\Desktop\\Draw AI\\server\\uploads\\test_input.jpg",
+    "success_url":  "http://localhost:5000/api/payment-success?session_id=test123"
+}

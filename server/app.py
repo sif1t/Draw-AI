@@ -1,4 +1,6 @@
 import os
+import time
+from datetime import datetime
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import sketch
@@ -177,6 +179,8 @@ def payment_success():
         return jsonify({
             "success": True,
             "premium_sketch": premium_sketch_base64,
+            "purchase_date": session_data.get("purchase_date", datetime.now().strftime("%Y-%m-%d %H:%M")),
+            "transaction_id": session_data.get("transaction_id", ""),
             "download_url": f"/api/download/{session_id}"
         })
     
@@ -187,11 +191,18 @@ def payment_success():
     if session_id:
         payment_verified = payments.verify_payment_intent(session_id)
         if not payment_verified:
-            return jsonify({"error": "Payment verification failed. Please complete the payment process."}), 400
+            return jsonify({
+                "error": "Payment verification failed. Please complete the payment process.",
+                "error_code": "payment_incomplete"
+            }), 400
     
-    # Get session data
+    # Get fresh session data
     with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
         session_data = json.load(f)
+    
+    # Generate transaction ID if not present
+    transaction_id = session_data.get("transaction_id", f"TX{uuid.uuid4().hex[:8].upper()}")
+    purchase_date = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     # Convert to sketch without watermark
     try:
@@ -200,9 +211,11 @@ def payment_success():
             add_watermark=False
         )
         
-        # Update session data
+        # Update session data with payment details
         session_data["premium_sketch_path"] = premium_sketch_path
         session_data["paid"] = True
+        session_data["purchase_date"] = purchase_date
+        session_data["transaction_id"] = transaction_id
         
         # Save updated session data
         with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'w') as f:
@@ -213,6 +226,8 @@ def payment_success():
         return jsonify({
             "success": True,
             "premium_sketch": premium_sketch_base64,
+            "purchase_date": purchase_date,
+            "transaction_id": transaction_id,
             "download_url": f"/api/download/{session_id}"
         })
         
@@ -313,54 +328,170 @@ def download_sketch(session_id):
 @app.route('/payment/checkout', methods=['GET'])
 def payment_checkout():
     """
-    Render a simple payment form for the local payment system
+    Render a professional payment form for the local payment system
     """
     payment_id = request.args.get('payment_id')
     
-    # Return HTML for a simple payment form
+    # Return HTML for an enhanced payment form that looks like a real payment processor
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Draw AI - Payment</title>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-            .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-            h1 {{ color: #333; text-align: center; margin-bottom: 20px; }}
-            .form-group {{ margin-bottom: 15px; }}
-            label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
-            input {{ width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }}
-            button {{ background-color: #ff5c38; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }}
-            button:hover {{ background-color: #e64a2e; }}
-            .note {{ font-size: 12px; color: #666; margin-top: 20px; }}
+            body {{ 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                margin: 0; 
+                padding: 0; 
+                background-color: #f7f9fc; 
+                color: #333;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+            }}
+            
+            .payment-container {{ 
+                max-width: 480px; 
+                width: 100%;
+                background: white; 
+                padding: 30px; 
+                border-radius: 12px; 
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); 
+                margin: 20px;
+            }}
+            
+            .logo-area {{
+                text-align: center;
+                margin-bottom: 25px;
+            }}
+            
+            h1 {{ 
+                font-size: 22px;
+                color: #333; 
+                text-align: center; 
+                margin-bottom: 25px; 
+                font-weight: 600;
+            }}
+            
+            .form-group {{ 
+                margin-bottom: 20px; 
+            }}
+            
+            label {{ 
+                display: block; 
+                margin-bottom: 8px; 
+                font-weight: 500; 
+                font-size: 14px;
+                color: #555;
+            }}
+            
+            input {{ 
+                width: 100%; 
+                padding: 12px; 
+                border: 1px solid #ddd; 
+                border-radius: 6px; 
+                box-sizing: border-box; 
+                font-size: 16px;
+            }}
+            
+            button {{ 
+                background-color: #4169e1; 
+                color: white; 
+                border: none;
+                padding: 14px 20px; 
+                border-radius: 6px;
+                cursor: pointer; 
+                width: 100%; 
+                font-size: 16px;
+                font-weight: 600;
+            }}
+            
+            button:hover {{ 
+                background-color: #3454c9;
+            }}
+            
+            .input-row {{
+                display: flex;
+                gap: 15px;
+            }}
+            
+            .input-row .form-group {{
+                flex: 1;
+            }}
+            
+            .amount-display {{
+                text-align: center;
+                font-size: 28px;
+                font-weight: bold;
+                margin-bottom: 30px;
+                color: #333;
+            }}
+            
+            .card-icons {{
+                display: flex;
+                justify-content: center;
+                margin-bottom: 20px;
+                gap: 10px;
+            }}
+            
+            .card-icon {{
+                width: 40px;
+                opacity: 0.7;
+            }}
+            
+            .footer {{
+                text-align: center;
+                margin-top: 25px;
+                font-size: 13px;
+                color: #777;
+            }}
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>Draw AI - Payment</h1>
-            <p>Complete your purchase to remove the watermark</p>
+        <div class="payment-container">
+            <div class="logo-area">
+                <h2 style="margin:0">Draw AI - Payment</h2>
+            </div>
+            
+            <h1>Complete your purchase to remove the watermark</h1>
+            
+            <div class="amount-display">$1.00</div>
+            
+            <div class="card-icons">
+                <img src="https://cdn-icons-png.flaticon.com/128/196/196578.png" alt="Visa" class="card-icon">
+                <img src="https://cdn-icons-png.flaticon.com/128/196/196561.png" alt="Mastercard" class="card-icon">
+                <img src="https://cdn-icons-png.flaticon.com/128/196/196539.png" alt="American Express" class="card-icon">
+                <img src="https://cdn-icons-png.flaticon.com/128/196/196565.png" alt="Discover" class="card-icon">
+            </div>
+            
             <form id="payment-form" action="/payment/process" method="post">
                 <input type="hidden" name="payment_id" value="{payment_id}">
                 
                 <div class="form-group">
                     <label for="card-number">Card Number</label>
-                    <input type="text" id="card-number" name="card_number" placeholder="1234 5678 9012 3456" maxlength="16" required>
+                    <input type="text" id="card-number" name="card_number" placeholder="1234 5678 9012 3456" maxlength="19" required>
                 </div>
                 
-                <div class="form-group">
-                    <label for="expiry">Expiration Date</label>
-                    <input type="text" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required>
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="expiry">Expiration Date</label>
+                        <input type="text" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cvc">CVC</label>
+                        <input type="text" id="cvc" name="cvc" placeholder="123" maxlength="4" required>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="cvc">CVC</label>
-                    <input type="text" id="cvc" name="cvc" placeholder="123" maxlength="3" required>
-                </div>
+                <button type="submit" id="submit-button">Pay Now</button>
                 
-                <button type="submit">Pay $1.00</button>
-                
-                <div class="note">
-                    <p>This is a test payment system. Use card number ending in 4242 to simulate successful payment.</p>
+                <div class="footer">
+                    <p>Your payment information is secure</p>
+                    <p style="font-size:11px; margin-top:5px">
+                        Use any card number ending in 4242 to simulate a successful payment
+                    </p>
                 </div>
             </form>
         </div>
@@ -373,50 +504,362 @@ def payment_checkout():
 @app.route('/payment/process', methods=['POST'])
 def process_payment():
     """
-    Process the payment form submission
+    Process the payment form submission with realistic handling
     """
     payment_id = request.form.get('payment_id')
     card_number = request.form.get('card_number')
     expiry = request.form.get('expiry')
     cvc = request.form.get('cvc')
     
-    # Basic validation
-    if not all([payment_id, card_number, expiry, cvc]):
-        return jsonify({"error": "Missing payment information"}), 400
+    # Clean the input values
+    if card_number:
+        card_number = card_number.replace(' ', '')
     
-    # Process payment
+    # Enhanced validation
+    errors = {}
+    if not payment_id:
+        errors['payment_id'] = "Invalid payment session"
+    if not card_number or len(card_number) < 13 or len(card_number) > 19:
+        errors['card_number'] = "Please enter a valid card number"
+    if not expiry or '/' not in expiry:
+        errors['expiry'] = "Please enter a valid expiration date"
+    if not cvc or len(cvc) < 3:
+        errors['cvc'] = "Please enter a valid security code"
+    
+    if errors:
+        return jsonify({"error": "Payment validation failed", "fields": errors}), 400
+    
+    # Add a short delay to simulate payment processing
+    # This makes the experience more realistic
+    time.sleep(1)
+    
+    # Process payment through our payment handler
     result = payments.process_payment(payment_id, card_number, expiry, cvc)
     
     if result['success']:
-        # Redirect to success URL
+        # Show success with a professional confirmation page
         return f"""
+        <!DOCTYPE html>
         <html>
         <head>
-            <title>Payment Successful</title>
+            <title>Payment Successful | Draw AI</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                :root {{
+                    --success-color: #2ecc71;
+                    --primary-color: #4169e1;
+                }}
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f7f9fc;
+                    color: #333;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                }}
+                
+                .success-container {{
+                    max-width: 480px;
+                    width: 100%;
+                    background: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                    text-align: center;
+                    margin: 20px;
+                }}
+                
+                .success-icon {{
+                    width: 80px;
+                    height: 80px;
+                    margin: 0 auto 25px;
+                    background-color: var(--success-color);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                
+                .success-icon i {{
+                    color: white;
+                    font-size: 40px;
+                }}
+                
+                h1 {{
+                    font-size: 24px;
+                    margin-bottom: 15px;
+                    color: #333;
+                }}
+                
+                p {{
+                    color: #666;
+                    margin-bottom: 25px;
+                    font-size: 16px;
+                }}
+                
+                .transaction-details {{
+                    background-color: #f9f9f9;
+                    border-radius: 8px;
+                    padding: 20px;
+                    margin-bottom: 25px;
+                    text-align: left;
+                }}
+                
+                .transaction-row {{
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                }}
+                
+                .transaction-row:last-child {{
+                    margin-bottom: 0;
+                }}
+                
+                .transaction-row .label {{
+                    color: #777;
+                }}
+                
+                .transaction-row .value {{
+                    font-weight: 600;
+                    color: #333;
+                }}
+                
+                .redirecting {{
+                    margin-top: 30px;
+                    font-size: 15px;
+                    color: #888;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                
+                .spinner {{
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid rgba(0,0,0,0.1);
+                    border-left-color: var(--primary-color);
+                    border-radius: 50%;
+                    margin-right: 10px;
+                    animation: spin 1s linear infinite;
+                }}
+                
+                @keyframes spin {{
+                    to {{ transform: rotate(360deg); }}
+                }}
+            </style>
             <script>
-                window.location.href = "{result['redirect_url']}";
+                // Redirect after 3 seconds for a more professional experience
+                setTimeout(function() {{
+                    window.location.href = "{result['redirect_url']}";
+                }}, 3000);
             </script>
         </head>
         <body>
-            <h1>Payment Successful</h1>
-            <p>Redirecting to download page...</p>
+            <div class="success-container">
+                <div class="success-icon">
+                    <i class="fas fa-check"></i>
+                </div>
+                
+                <h1>Payment Successful!</h1>
+                <p>Your payment has been processed successfully. You now have access to the premium version.</p>
+                
+                <div class="transaction-details">
+                    <div class="transaction-row">
+                        <span class="label">Amount:</span>
+                        <span class="value">$1.00</span>
+                    </div>
+                    <div class="transaction-row">
+                        <span class="label">Date:</span>
+                        <span class="value">{datetime.now().strftime('%b %d, %Y')}</span>
+                    </div>
+                    <div class="transaction-row">
+                        <span class="label">Payment Method:</span>
+                        <span class="value">•••• {card_number[-4:]}</span>
+                    </div>
+                    <div class="transaction-row">
+                        <span class="label">Transaction ID:</span>
+                        <span class="value">{payment_id[:8].upper()}</span>
+                    </div>
+                </div>
+                
+                <div class="redirecting">
+                    <div class="spinner"></div>
+                    <span>Redirecting to your download...</span>
+                </div>
+            </div>
         </body>
         </html>
         """
     else:
-        # Redirect to cancel URL with error
+        # Show failure with clear explanation and retry option
+        error_message = result.get('error', 'Transaction declined')
+        error_code = result.get('code', 'unknown_error')
+        
         return f"""
+        <!DOCTYPE html>
         <html>
         <head>
-            <title>Payment Failed</title>
+            <title>Payment Failed | Draw AI</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                :root {{
+                    --error-color: #e74c3c;
+                    --primary-color: #4169e1;
+                }}
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f7f9fc;
+                    color: #333;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                }}
+                
+                .error-container {{
+                    max-width: 480px;
+                    width: 100%;
+                    background: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                    text-align: center;
+                    margin: 20px;
+                }}
+                
+                .error-icon {{
+                    width: 80px;
+                    height: 80px;
+                    margin: 0 auto 25px;
+                    background-color: var(--error-color);
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                
+                .error-icon i {{
+                    color: white;
+                    font-size: 40px;
+                }}
+                
+                h1 {{
+                    font-size: 24px;
+                    margin-bottom: 15px;
+                    color: #333;
+                }}
+                
+                p {{
+                    color: #666;
+                    margin-bottom: 25px;
+                    font-size: 16px;
+                }}
+                
+                .error-details {{
+                    background-color: #fcf0ef;
+                    border: 1px solid #fadbd8;
+                    color: #a04034;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 25px;
+                    font-size: 15px;
+                    text-align: left;
+                }}
+                
+                .error-code {{
+                    display: block;
+                    font-size: 12px;
+                    margin-top: 5px;
+                    color: #e74c3c;
+                    opacity: 0.7;
+                }}
+                
+                .buttons {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                }}
+                
+                .button {{
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    font-weight: 600;
+                    font-size: 15px;
+                    text-decoration: none;
+                    display: inline-block;
+                    cursor: pointer;
+                    transition: background-color 0.3s, transform 0.1s;
+                }}
+                
+                .primary-button {{
+                    background-color: var(--primary-color);
+                    color: white;
+                }}
+                
+                .primary-button:hover {{
+                    background-color: #3454c9;
+                }}
+                
+                .secondary-button {{
+                    background-color: transparent;
+                    color: #555;
+                    border: 1px solid #ddd;
+                }}
+                
+                .secondary-button:hover {{
+                    background-color: #f5f5f5;
+                }}
+                
+                .redirecting {{
+                    margin-top: 30px;
+                    font-size: 14px;
+                    color: #888;
+                }}
+            </style>
             <script>
-                window.location.href = "{result['redirect_url']}";
+                // Redirect after 8 seconds to allow user to read the error
+                setTimeout(function() {{
+                    window.location.href = "{result['redirect_url']}";
+                }}, 8000);
             </script>
         </head>
         <body>
-            <h1>Payment Failed</h1>
-            <p>Error: {result.get('error', 'Unknown error')}</p>
-            <p>Redirecting...</p>
+            <div class="error-container">
+                <div class="error-icon">
+                    <i class="fas fa-times"></i>
+                </div>
+                
+                <h1>Payment Failed</h1>
+                <p>We couldn't process your payment. Please check your payment details and try again.</p>
+                
+                <div class="error-details">
+                    <strong>{error_message}</strong>
+                    <span class="error-code">Error code: {error_code}</span>
+                </div>
+                
+                <div class="buttons">
+                    <a href="/payment/checkout?payment_id={payment_id}" class="button primary-button">
+                        Try Again
+                    </a>
+                    <a href="{result['redirect_url']}" class="button secondary-button">
+                        Go back to results
+                    </a>
+                </div>
+                
+                <div class="redirecting">
+                    <p>Redirecting in 8 seconds...</p>
+                </div>
+            </div>
         </body>
         </html>
         """

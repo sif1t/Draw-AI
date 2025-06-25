@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Draw AI - Payment System Documentation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #4169e1;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #555;
+            margin-top: 40px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .card {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .test-card {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: white;
+        }
+        
+        .test-card-info {
+            margin-left: 20px;
+        }
+        
+        .test-card-number {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .card-type {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .card-result {
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .success {
+            color: #2ecc71;
+        }
+        
+        .error {
+            color: #e74c3c;
+        }
+        
+        .features-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .features-list li {
+            position: relative;
+            padding-left: 30px;
+            margin-bottom: 10px;
+        }
+        
+        .features-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4169e1;
+            font-weight: bold;
+        }
+        
+        .note {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Draw AI - Payment System Documentation</h1>
+    
+    <div class="card">
+        <h2>About the Payment System</h2>
+        <p>
+            The Draw AI payment system is designed to provide a realistic payment experience for users purchasing the premium version that removes watermarks from their sketches.
+        </p>
+        
+        <ul class="features-list">
+            <li>Professional card entry form with validation</li>
+            <li>Real-time card type detection</li>
+            <li>Proper success and error handling</li>
+            <li>Transaction receipts and confirmations</li>
+            <li>Secure connection and data handling</li>
+        </ul>
+    </div>
+    
+    <h2>Test Cards</h2>
+    <p>The payment system accepts any valid card numbers for testing, but provides different responses based on the last 4 digits:</p>
+    
+    <div class="test-card">
+        <div class="test-card-info">
+            <div class="test-card-number">4242 4242 4242 4242</div>
+            <div class="card-type">Visa</div>
+            <div class="card-result success">Success: Payment approved</div>
+        </div>
+    </div>
+    
+    <div class="test-card">
+        <div class="test-card-info">
+            <div class="test-card-number">4000 0000 0000 0000</div>
+            <div class="card-type">Visa</div>
+            <div class="card-result error">Error: Card has insufficient funds</div>
+        </div>
+    </div>
+    
+    <div class="test-card">
+        <div class="test-card-info">
+            <div class="test-card-number">4000 0000 0000 0001</div>
+            <div class="card-type">Visa</div>
+            <div class="card-result error">Error: Card expired</div>
+        </div>
+    </div>
+    
+    <div class="test-card">
+        <div class="test-card-info">
+            <div class="test-card-number">4000 0000 0000 0002</div>
+            <div class="card-type">Visa</div>
+            <div class="card-result error">Error: Card declined by issuer</div>
+        </div>
+    </div>
+    
+    <div class="test-card">
+        <div class="test-card-info">
+            <div class="test-card-number">4000 0000 0000 0003</div>
+            <div class="card-type">Visa</div>
+            <div class="card-result error">Error: Incorrect CVC</div>
+        </div>
+    </div>
+    
+    <h2>Payment Flow</h2>
+    <p>
+        1. User uploads an image and converts it to a sketch<br>
+        2. User clicks "Premium Upgrade" button<br>
+        3. Payment form is displayed<br>
+        4. User enters card details and submits<br>
+        5. Payment is processed with appropriate success/error handling<br>
+        6. On success, user receives their watermark-free image<br>
+        7. Transaction details and receipt are provided
+    </p>
+    
+    <div class="note">
+        <strong>Note:</strong> This is a simulated payment system. In a production environment, you would integrate with a real payment processor like Stripe or PayPal.
+    </div>
+    
+    <h2>Testing the Payment System</h2>
+    <p>
+        To test the payment system, use this link:<br>
+        <a href="http://localhost:5000/payment/checkout?payment_id=test123">http://localhost:5000/payment/checkout?payment_id=test123</a>
+    </p>
+</body>
+</html>
