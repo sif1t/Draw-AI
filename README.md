@@ -8,6 +8,7 @@ Draw AI is a full-featured web application that allows users to upload an image 
   - **Basic Pencil Sketch**: Clean, high-contrast pencil sketch style
   - **Realistic Pencil Sketch**: Natural-looking sketch with smooth shading
   - **Artistic Portrait**: Professional artist-quality sketch similar to hand-drawn portraits
+  - **Ultra-Clear Sketch**: Maximum clarity with extremely crisp, well-defined lines
 - Image Upload (JPG/PNG)
 - AI-powered Advanced Sketch Generator
 - Preview Output with Watermark

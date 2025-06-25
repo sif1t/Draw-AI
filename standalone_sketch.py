@@ -12,8 +12,10 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
     Args:
         image_path: Path to the input image
         output_path: Path to save the output image (if None, will use input name + _sketch)
-        mode: "regular" for standard sketch, "realistic" for realistic sketch with shading, 
-              "artistic" for professional artist-quality portrait sketch (default)
+        mode: "regular" for standard sketch, 
+              "realistic" for realistic sketch with shading, 
+              "artistic" for professional artist-quality portrait sketch,
+              "ultra-clear" for ultra-defined lines with maximum clarity (default: artistic)
         
     Returns:
         Path to the generated sketch image
@@ -121,8 +123,80 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
             # Final contrast enhancement
             result = cv2.convertScaleAbs(result, alpha=1.2, beta=5)
             
+        elif mode == "ultra-clear":
+            # Ultra-clear sketch with maximum clarity and line definition
+            
+            # Convert to grayscale with optimal weights for clarity
+            if len(img.shape) == 3:
+                b, g, r = cv2.split(img)
+                gray = cv2.addWeighted(cv2.addWeighted(r, 0.4, g, 0.4, 0), 0.8, b, 0.2, 0)
+            else:
+                gray = img.copy()
+            
+            # Apply advanced detail enhancement
+            clahe1 = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            clahe2 = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4))
+            gray_enhanced = clahe1.apply(gray)
+            gray_enhanced = clahe2.apply(gray_enhanced)
+            
+            # Edge-preserving noise reduction
+            denoise = cv2.bilateralFilter(gray_enhanced, 5, 15, 15)
+            
+            # Ultra-precise edge detection (multi-scale approach)
+            edges1 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=1)
+            edges2 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=3)
+            edges3 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=5)
+            
+            # Normalize and combine edge maps
+            _, edges1_thresh = cv2.threshold(edges1, 5, 255, cv2.THRESH_BINARY_INV)
+            _, edges2_thresh = cv2.threshold(edges2, 10, 255, cv2.THRESH_BINARY_INV)
+            _, edges3_thresh = cv2.threshold(edges3, 15, 255, cv2.THRESH_BINARY_INV)
+            
+            # Combine edges with weighted importance
+            edge_map = cv2.addWeighted(
+                cv2.addWeighted(edges1_thresh, 0.5, edges2_thresh, 0.3, 0),
+                0.8, edges3_thresh, 0.2, 0
+            )
+            
+            # High-definition shading base
+            inverted = 255 - denoise
+            
+            # Multi-scale blurring for natural gradient transitions
+            blur1 = cv2.GaussianBlur(inverted, (15, 15), 0)  # Broad shading
+            blur2 = cv2.GaussianBlur(inverted, (7, 7), 0)    # Medium details
+            blur3 = cv2.GaussianBlur(inverted, (3, 3), 0)    # Fine details
+            
+            # Combine blurs with precise weighting
+            combined_blur = cv2.addWeighted(
+                cv2.addWeighted(blur1, 0.4, blur2, 0.4, 0),
+                0.7, blur3, 0.3, 0
+            )
+            
+            # Apply dodge blend for base sketch
+            sketch_base = cv2.divide(denoise, 255 - combined_blur, scale=256.0)
+            
+            # Apply unsharp mask for extreme clarity
+            gaussian = cv2.GaussianBlur(sketch_base, (0, 0), 3.0)
+            unsharp = cv2.addWeighted(sketch_base, 2.0, gaussian, -1.0, 0)
+            
+            # Merge with edge details for ultra-crisp lines
+            sketch_with_edges = cv2.addWeighted(unsharp, 0.6, edge_map, 0.4, 0)
+            
+            # Apply extreme contrast enhancement
+            sketch_contrast = cv2.convertScaleAbs(sketch_with_edges, alpha=1.5, beta=-15)
+            
+            # Apply additional local contrast enhancement
+            clahe_final = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(3, 3))
+            sketch_contrast = clahe_final.apply(sketch_contrast)
+            
+            # Apply sharpening for final definition
+            sharpen_kernel = np.array([[-0.4, -0.4, -0.4], 
+                                     [-0.4,  5.2, -0.4], 
+                                     [-0.4, -0.4, -0.4]])
+            result = cv2.filter2D(sketch_contrast, -1, sharpen_kernel)
+            
         else:
-            print(f"Error: Invalid mode '{mode}'. Use 'regular', 'realistic', or 'artistic'.")
+            print(f"Error: Invalid mode '{mode}'. Use 'regular', 'realistic', 'artistic', or 'ultra-clear'.")
             return None
         
         # Save the sketch
@@ -140,7 +214,7 @@ def main():
     parser = argparse.ArgumentParser(description='Convert an image to a pencil sketch.')
     parser.add_argument('image_path', help='Path to the input image')
     parser.add_argument('-o', '--output', help='Path to save the output image')
-    parser.add_argument('-m', '--mode', choices=['regular', 'realistic', 'artistic'], 
+    parser.add_argument('-m', '--mode', choices=['regular', 'realistic', 'artistic', 'ultra-clear'], 
                         default='artistic', help='Sketch mode (default: artistic)')
     
     args = parser.parse_args()

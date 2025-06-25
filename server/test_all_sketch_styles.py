@@ -55,6 +55,16 @@ def test_all_sketch_styles(image_path, output_dir=None):
         cv2.imwrite(portrait_output, img)
         print(f"Artistic portrait sketch saved to: {portrait_output}")
         
+        # Test ultra-clear sketch
+        print("\n4. Testing ultra-clear sketch...")
+        ultra_path = improved_sketch.convert_to_ultra_clear_sketch(image_path, add_watermark=False)
+        
+        # Copy to output dir with more descriptive name
+        ultra_output = os.path.join(output_dir, f"{base_name}_ultra_clear.jpg")
+        img = cv2.imread(ultra_path)
+        cv2.imwrite(ultra_output, img)
+        print(f"Ultra-clear sketch saved to: {ultra_output}")
+        
         print("\nAll sketch styles generated successfully!")
         return True
     except Exception as e:

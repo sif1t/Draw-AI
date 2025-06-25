@@ -147,6 +147,8 @@ def convert_image_with_style():
                 sketch_path = improved_sketch.convert_to_realistic_pencil_sketch(filepath, add_watermark=True)
             elif style == 'portrait':
                 sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
+            elif style == 'ultra-clear':
+                sketch_path = improved_sketch.convert_to_ultra_clear_sketch(filepath, add_watermark=True)
             else:
                 # Default to artistic portrait sketch for best results
                 sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)

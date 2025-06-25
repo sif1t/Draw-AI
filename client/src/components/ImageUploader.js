@@ -125,9 +125,15 @@ const ImageUploader = () => {
                     >
                         Artistic Portrait
                     </button>
+                    <button
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'ultra-clear' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('ultra-clear')}
+                    >
+                        Ultra-Clear
+                    </button>
                 </div>
                 <div className="mt-2 text-center text-xs text-gray-500">
-                    Artistic Portrait generates professional-quality sketches like the examples shown
+                    Ultra-Clear delivers the sharpest, most defined pencil lines with maximum clarity
                 </div>
             </div>
 

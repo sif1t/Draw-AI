@@ -503,43 +503,49 @@ def convert_to_artistic_portrait_sketch(image_path, add_watermark=True):
         # Start with base sketch
         artistic_blend = sketch_base.copy()
         
-        # Add edge details sequentially (simulates layered drawing process)
-        # Stronger edges need less opacity
-        artistic_blend = cv2.addWeighted(artistic_blend, 0.7, edge_maps[0], 0.3, 0)
-        artistic_blend = cv2.addWeighted(artistic_blend, 0.8, edge_maps[1], 0.2, 0)
-        artistic_blend = cv2.addWeighted(artistic_blend, 0.9, edge_maps[2], 0.1, 0)
+        # Extract and enhance the finest line details for crystal-clear edges
+        fine_details = cv2.Laplacian(fine, cv2.CV_8U, ksize=3)
+        _, fine_details = cv2.threshold(fine_details, 7, 255, cv2.THRESH_BINARY_INV)
+        
+        # Add edge details sequentially (simulates layered drawing process with clearer lines)
+        # Higher contrast edges for clearer definition
+        artistic_blend = cv2.addWeighted(artistic_blend, 0.65, edge_maps[0], 0.35, 0)
+        artistic_blend = cv2.addWeighted(artistic_blend, 0.75, edge_maps[1], 0.25, 0)
+        artistic_blend = cv2.addWeighted(artistic_blend, 0.85, fine_details, 0.15, 0)
+        
+        # Apply additional clarity with unsharp mask
+        gaussian_blur = cv2.GaussianBlur(artistic_blend, (0, 0), 2.0)
+        unsharp_mask = cv2.addWeighted(artistic_blend, 1.5, gaussian_blur, -0.5, 0)
+        artistic_blend = cv2.convertScaleAbs(unsharp_mask)
         
         # Step 8: Professional contrast enhancement for depth
-        # Enhance contrast
-        clahe_final = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        # Enhance contrast with more aggressive settings for clarity
+        clahe_final = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(4, 4))
         sketch_enhanced = clahe_final.apply(artistic_blend)
         
-        # Further refine the drawing with local adjustments
-        sketch_enhanced = cv2.convertScaleAbs(sketch_enhanced, alpha=1.2, beta=2)
+        # Further refine the drawing with local adjustments - higher contrast for clarity
+        sketch_enhanced = cv2.convertScaleAbs(sketch_enhanced, alpha=1.35, beta=5)
         
-        # Step 9: High-quality artist paper simulation
+        # Additional edge enhancement for absolute clarity
+        kernel = np.array([[-0.3, -0.5, -0.3], 
+                           [-0.5,  5.7, -0.5], 
+                           [-0.3, -0.5, -0.3]])
+        sketch_enhanced = cv2.filter2D(sketch_enhanced, -1, kernel)
+        
+        # Step 9: High-quality artist paper simulation with less texture for clearer lines
         h, w = sketch_enhanced.shape
         
-        # Premium sketch paper texture (creamy off-white)
-        paper_texture = np.ones((h, w), dtype=np.uint8) * 252
+        # Bright white paper for maximum contrast and clarity (less texture)
+        paper_texture = np.ones((h, w), dtype=np.uint8) * 255
         
-        # Multi-layered paper grain (simulates artist-grade paper)
+        # For maximum clarity, use minimal paper texture that doesn't interfere with line definition
         np.random.seed(42)
-        fine_grain = np.random.randint(248, 255, (h, w), dtype=np.uint8)
+        # Very subtle fine grain (almost imperceptible)
+        fine_grain = np.random.randint(252, 255, (h, w), dtype=np.uint8)
         fine_grain = cv2.GaussianBlur(fine_grain, (3, 3), 0)
         
-        # Medium grain (tooth of the paper)
-        medium_grain_pattern = np.random.randint(245, 253, (h//3, w//3), dtype=np.uint8)
-        medium_grain = cv2.resize(medium_grain_pattern, (w, h), interpolation=cv2.INTER_LINEAR)
-        
-        # Subtle large grain (paper manufacturing patterns)
-        coarse_grain_pattern = np.random.randint(240, 250, (h//5, w//5), dtype=np.uint8)
-        coarse_grain = cv2.resize(coarse_grain_pattern, (w, h), interpolation=cv2.INTER_LINEAR)
-        
-        # Blend grain layers like premium artist paper
-        paper_texture = cv2.addWeighted(paper_texture, 0.8, fine_grain, 0.2, 0)
-        paper_texture = cv2.addWeighted(paper_texture, 0.85, medium_grain, 0.15, 0)
-        paper_texture = cv2.addWeighted(paper_texture, 0.9, coarse_grain, 0.1, 0)
+        # Apply only a hint of texture (for natural look without compromising clarity)
+        paper_texture = cv2.addWeighted(paper_texture, 0.92, fine_grain, 0.08, 0)
         
         # Step 10: Final artistic integration
         # Blend sketch with premium paper texture
@@ -646,3 +652,210 @@ def convert_to_base64(image_path):
     except Exception as e:
         print(f"Error in base64 conversion: {str(e)}")
         raise
+
+def convert_to_ultra_clear_sketch(image_path, add_watermark=True):
+    """
+    Convert an image to an ultra-clear, high-definition pencil sketch with
+    extremely crisp lines and professional detailing. This method prioritizes
+    absolute clarity and line definition over artistic effects.
+    
+    Args:
+        image_path: Path to the input image
+        add_watermark: Boolean to determine if watermark should be added
+    
+    Returns:
+        Path to the generated sketch image
+    """
+    print(f"Converting image to ultra-clear pencil sketch. Add watermark: {add_watermark}")
+    try:
+        # Check if file exists
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+            
+        # Read the image with error handling
+        img = cv2.imread(image_path)
+        
+        # Check if image was successfully loaded
+        if img is None:
+            raise ValueError(f"Failed to load image from {image_path}")
+        
+        # Step 1: High-resolution optimization
+        max_dimension = 2000  # Higher resolution for maximum detail
+        height, width = img.shape[:2]
+        if max(height, width) > max_dimension:
+            scale_factor = max_dimension / max(height, width)
+            img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+            height, width = img.shape[:2]
+        
+        # Step 2: Convert to grayscale with optimal weights for clarity
+        if len(img.shape) == 3:
+            # Use precise channel mixing for maximum detail preservation
+            b, g, r = cv2.split(img)
+            # More emphasis on red and green channels for facial features
+            gray = cv2.addWeighted(cv2.addWeighted(r, 0.4, g, 0.4, 0), 0.8, b, 0.2, 0)
+        else:
+            gray = img.copy()
+        
+        # Step 3: Apply advanced detail enhancement
+        # Use multiple passes of CLAHE with different settings
+        clahe1 = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe2 = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4))
+        
+        # Apply first pass of CLAHE
+        gray_enhanced = clahe1.apply(gray)
+        # Apply second pass for even more local contrast
+        gray_enhanced = clahe2.apply(gray_enhanced)
+        
+        # Step 4: Edge-preserving noise reduction
+        # Use bilateral filter with carefully tuned parameters
+        denoise = cv2.bilateralFilter(gray_enhanced, 5, 15, 15)
+        
+        # Step 5: Ultra-precise edge detection (multi-scale approach)
+        # Create multiple edge maps for different feature scales
+        edges1 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=1)
+        edges2 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=3)
+        edges3 = cv2.Laplacian(denoise, cv2.CV_8U, ksize=5)
+        
+        # Normalize and combine edge maps with emphasis on fine details
+        _, edges1_thresh = cv2.threshold(edges1, 5, 255, cv2.THRESH_BINARY_INV)
+        _, edges2_thresh = cv2.threshold(edges2, 10, 255, cv2.THRESH_BINARY_INV)
+        _, edges3_thresh = cv2.threshold(edges3, 15, 255, cv2.THRESH_BINARY_INV)
+        
+        # Combine edges with weighted importance
+        edge_map = cv2.addWeighted(
+            cv2.addWeighted(edges1_thresh, 0.5, edges2_thresh, 0.3, 0),
+            0.8, edges3_thresh, 0.2, 0
+        )
+        
+        # Step 6: High-definition shading base (for enhanced 3D effect)
+        # Invert for dodge effect calculation
+        inverted = 255 - denoise
+        
+        # Multi-scale blurring for natural gradient transitions
+        blur1 = cv2.GaussianBlur(inverted, (15, 15), 0)  # Broad shading
+        blur2 = cv2.GaussianBlur(inverted, (7, 7), 0)    # Medium details
+        blur3 = cv2.GaussianBlur(inverted, (3, 3), 0)    # Fine details
+        
+        # Combine blurs with precise weighting
+        combined_blur = cv2.addWeighted(
+            cv2.addWeighted(blur1, 0.4, blur2, 0.4, 0),
+            0.7, blur3, 0.3, 0
+        )
+        
+        # Step 7: Apply professional dodge blend for base sketch
+        sketch_base = cv2.divide(denoise, 255 - combined_blur, scale=256.0)
+        
+        # Step 8: Apply unsharp mask for extreme clarity
+        # First blur for unsharp mask
+        gaussian = cv2.GaussianBlur(sketch_base, (0, 0), 3.0)
+        # Apply aggressive unsharp mask (stronger than normal)
+        unsharp = cv2.addWeighted(sketch_base, 2.0, gaussian, -1.0, 0)
+        
+        # Step 9: Merge with edge details for ultra-crisp lines
+        # Combine the unsharp mask with edge map
+        sketch_with_edges = cv2.addWeighted(unsharp, 0.6, edge_map, 0.4, 0)
+        
+        # Step 10: Apply extreme contrast enhancement
+        # Use aggressive contrast stretching for maximum definition
+        min_val, max_val = 0, 255
+        # Apply contrast stretching to make whites whiter and blacks blacker
+        sketch_contrast = cv2.convertScaleAbs(sketch_with_edges, alpha=1.5, beta=-15)
+        
+        # Step 11: Apply additional local contrast enhancement
+        clahe_final = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(3, 3))
+        sketch_contrast = clahe_final.apply(sketch_contrast)
+        
+        # Step 12: Apply sharpening for final definition
+        sharpen_kernel = np.array([[-0.4, -0.4, -0.4], 
+                                 [-0.4,  5.2, -0.4], 
+                                 [-0.4, -0.4, -0.4]])
+        sketch_sharpened = cv2.filter2D(sketch_contrast, -1, sharpen_kernel)
+        
+        # Step 13: Apply minimal paper texture (pure white background)
+        # Create a completely white base for maximum contrast
+        h, w = sketch_sharpened.shape
+        paper = np.ones((h, w), dtype=np.uint8) * 255
+        
+        # Add extremely subtle paper grain (almost imperceptible)
+        np.random.seed(42)
+        fine_grain = np.random.randint(253, 255, (h, w), dtype=np.uint8)
+        # Blur the grain slightly to make it smoother
+        fine_grain = cv2.GaussianBlur(fine_grain, (3, 3), 0)
+        
+        # Apply minimal texture
+        paper_texture = cv2.addWeighted(paper, 0.95, fine_grain, 0.05, 0)
+        
+        # Step 14: Create final ultra-clear result
+        result = cv2.multiply(sketch_sharpened, paper_texture, scale=1/255.0)
+        
+        # Final ultra-definition boost
+        result = cv2.convertScaleAbs(result, alpha=1.1, beta=3)
+        
+    except Exception as e:
+        print(f"Error in ultra-clear sketch conversion: {str(e)}")
+        raise
+    
+    # Add watermark if required
+    if add_watermark:
+        # Convert OpenCV image to PIL format for adding watermark
+        pil_img = Image.fromarray(result)
+        draw = ImageDraw.Draw(pil_img)
+        
+        # Set font for watermark - use larger font size
+        try:
+            font = ImageFont.truetype("arial.ttf", 40)
+        except:
+            # If arial is not available, use default
+            font = ImageFont.load_default()
+            
+        # Add watermark text
+        watermark_text = "DRAW AI"
+        img_width, img_height = pil_img.size
+        
+        # Calculate position (bottom-right corner)
+        try:
+            # For newer versions of Pillow
+            if hasattr(font, "getbbox"):  
+                bbox = font.getbbox(watermark_text)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+            else:  
+                # Fallback to deprecated method for older Pillow versions
+                text_width, text_height = draw.textsize(watermark_text, font=font)
+                
+            margin = 20  # Margin from the edge
+            x = img_width - text_width - margin
+            y = img_height - text_height - margin
+            
+            # Add a semi-transparent background for the watermark
+            draw.rectangle(
+                [(x - 10, y - 10), (x + text_width + 10, y + text_height + 10)], 
+                fill=(0, 0, 0, 128)
+            )
+            
+            # Add the watermark text
+            draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255, 200))
+            
+            # Convert back to OpenCV format
+            result = np.array(pil_img)
+        except Exception as e:
+            print(f"Error adding watermark: {str(e)}")
+            # Continue without watermark if method fails
+            result = np.array(pil_img)
+    
+    # Create a unique filename for the output
+    output_filename = f"sketch_{uuid.uuid4().hex}.jpg"
+    
+    # Get the base directory of the script
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    temp_dir = os.path.join(base_dir, "temp")
+    output_path = os.path.join(temp_dir, output_filename)
+    
+    # Ensure the temp directory exists
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    print(f"Saving ultra-clear sketch to: {output_path}")
+    # Save the sketch with high quality
+    cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    
+    return output_path
