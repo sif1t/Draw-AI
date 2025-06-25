@@ -34,17 +34,33 @@ def convert_to_sketch(image_path, add_watermark=True):
         # Convert the image to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # Invert the grayscale image
-        inverted = 255 - gray
+        # Apply slight bilateral filtering to preserve edges while smoothing
+        smooth = cv2.bilateralFilter(gray, 9, 75, 75)
         
-        # Apply Gaussian blur
+        # Enhance edges using adaptive thresholding
+        edges = cv2.adaptiveThreshold(smooth, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 2)
+        
+        # Invert the grayscale image
+        inverted = 255 - smooth
+        
+        # Apply Gaussian blur with adjusted parameters for better blending
         blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
         
         # Invert the blurred image
         inverted_blurred = 255 - blurred
         
-        # Create the pencil sketch image
-        sketch = cv2.divide(gray, inverted_blurred, scale=256.0)
+        # Dodge blend the images for a better pencil effect
+        sketch_base = cv2.divide(smooth, inverted_blurred, scale=256.0)
+        
+        # Blend the sketch with edges for enhanced pencil lines
+        sketch = cv2.addWeighted(sketch_base, 0.8, edges, 0.2, 0)
+        
+        # Optional: Add paper texture (subtle noise) for realism
+        noise = np.random.normal(0, 2, sketch.shape).astype(np.uint8)
+        sketch = cv2.add(sketch, noise)
+        
+        # Adjust contrast and brightness
+        sketch = cv2.convertScaleAbs(sketch, alpha=1.05, beta=10)
     except Exception as e:
         print(f"Error in sketch conversion process: {str(e)}")
         raise
