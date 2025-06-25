@@ -24,14 +24,14 @@ const Header = () => {
                             </Link>
                         </li>
                         <li>
-                            <a href="#" className="text-gray-600 hover:text-primary font-medium">
+                            <Link to="/about" className="text-gray-600 hover:text-primary font-medium">
                                 About
-                            </a>
+                            </Link>
                         </li>
                         <li>
-                            <a href="#" className="text-gray-600 hover:text-primary font-medium">
+                            <Link to="/contact" className="text-gray-600 hover:text-primary font-medium">
                                 Contact
-                            </a>
+                            </Link>
                         </li>
                     </ul>
                 </nav>
