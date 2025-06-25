@@ -187,7 +187,7 @@ const ResultPage = () => {
                                     />
                                 </div>
                                 <p className="text-sm text-gray-500 mb-4 text-center">
-                                    This free version includes a watermark
+                                    This free version includes the "Draw AI" watermark
                                 </p>
                                 <div className="flex flex-col md:flex-row justify-center gap-4">
                                     <button

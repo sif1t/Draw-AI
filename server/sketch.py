@@ -59,7 +59,7 @@ def convert_to_sketch(image_path, add_watermark=True):
         except:
             # If arial is not available, use default
             font = ImageFont.load_default()        # Add watermark text
-        watermark_text = "Draw AI - www.drawai.com"
+        watermark_text = "Draw AI"
         img_width, img_height = pil_img.size
         
         # Calculate position (center of image)
@@ -76,8 +76,17 @@ def convert_to_sketch(image_path, add_watermark=True):
             x = (img_width - text_width) // 2
             y = (img_height - text_height) // 2
             
-            # Add semi-transparent text
-            draw.text((x, y), watermark_text, font=font, fill=(200, 200, 200))
+            # Add more prominent watermark
+            # Add semi-transparent background for better visibility
+            padding = 20
+            watermark_bg_coords = [
+                (x - padding, y - padding),
+                (x + text_width + padding, y + text_height + padding)
+            ]
+            draw.rectangle(watermark_bg_coords, fill=(50, 50, 50, 100))
+            
+            # Add the watermark text
+            draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))
         except Exception as e:
             print(f"Error adding watermark: {str(e)}")
             # Continue without watermark if there's an error
@@ -145,16 +154,37 @@ def add_watermark_to_base64_image(base64_string):
         # If arial is not available, use default
         font = ImageFont.load_default()
       # Add watermark text
-    watermark_text = "Draw AI - www.drawai.com"
+    watermark_text = "Draw AI"
     img_width, img_height = img.size
     
     # Calculate position (center of image)
-    text_width, text_height = draw.textsize(watermark_text, font=font)
-    x = (img_width - text_width) // 2
-    y = (img_height - text_height) // 2
-    
-    # Add semi-transparent text
-    draw.text((x, y), watermark_text, font=font, fill=(200, 200, 200))
+    try:
+        # For newer versions of Pillow
+        if hasattr(font, "getbbox"):  
+            bbox = font.getbbox(watermark_text)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        else:  
+            # Fallback to deprecated method for older Pillow versions
+            text_width, text_height = draw.textsize(watermark_text, font=font)
+            
+        x = (img_width - text_width) // 2
+        y = (img_height - text_height) // 2
+        
+        # Add semi-transparent background for better visibility
+        padding = 20
+        watermark_bg_coords = [
+            (x - padding, y - padding),
+            (x + text_width + padding, y + text_height + padding)
+        ]
+        draw.rectangle(watermark_bg_coords, fill=(50, 50, 50, 100))
+        
+        # Add the watermark text
+        draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))
+    except Exception as e:
+        # If there's an error with the improved watermark, fall back to simple watermark
+        print(f"Error adding enhanced watermark: {str(e)}")
+        draw.text((img_width // 2, img_height // 2), watermark_text, font=font, fill=(255, 255, 255))
     
     # Convert back to base64
     buffered = io.BytesIO()

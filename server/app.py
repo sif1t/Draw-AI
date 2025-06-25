@@ -244,12 +244,26 @@ def download_free_sketch(session_id):
     
     # Send the free version (with watermark) for download
     if os.path.exists(session_data.get("sketch_path", "")):
-        return send_file(
-            session_data["sketch_path"],
-            as_attachment=True,
-            download_name="draw_ai_free_sketch.jpg",
-            mimetype='image/jpeg'
-        )
+        # Ensure the image has a watermark - create a fresh copy with watermark
+        original_path = session_data.get("original_path", "")
+        if os.path.exists(original_path):
+            # Generate a new watermarked version to ensure watermark is present
+            watermarked_sketch_path = sketch.convert_to_sketch(original_path, add_watermark=True)
+            
+            return send_file(
+                watermarked_sketch_path,
+                as_attachment=True,
+                download_name="draw_ai_free_sketch.jpg",
+                mimetype='image/jpeg'
+            )
+        else:
+            # Fall back to the stored sketch if original is not available
+            return send_file(
+                session_data["sketch_path"],
+                as_attachment=True,
+                download_name="draw_ai_free_sketch.jpg",
+                mimetype='image/jpeg'
+            )
     else:
         return jsonify({"error": "Sketch file not found"}), 404
 
