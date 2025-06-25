@@ -66,7 +66,7 @@ def convert_to_sketch(image_path, add_watermark=True):
         watermark_text = "DRAW AI"  # Using uppercase for better visibility
         img_width, img_height = pil_img.size
         
-        # Calculate position (center of image)
+        # Calculate position (bottom-right corner)
         try:
             # For newer versions of Pillow
             if hasattr(font, "getbbox"):  
@@ -77,15 +77,16 @@ def convert_to_sketch(image_path, add_watermark=True):
                 # Fallback to deprecated method for older Pillow versions
                 text_width, text_height = draw.textsize(watermark_text, font=font)
                 
-            x = (img_width - text_width) // 2
-            y = (img_height - text_height) // 2
+            margin = 20  # Margin from the edge
+            x = img_width - text_width - margin
+            y = img_height - text_height - margin
             
             # Create a new transparent layer for the watermark
             watermark_layer = Image.new('RGBA', pil_img.size, (0, 0, 0, 0))
             watermark_draw = ImageDraw.Draw(watermark_layer)
             
-            # Add a large centered watermark
-            padding = 40
+            # Add a large watermark in the bottom-right corner
+            padding = 20
             watermark_bg_coords = [
                 (x - padding, y - padding),
                 (x + text_width + padding, y + text_height + padding)
@@ -114,16 +115,17 @@ def convert_to_sketch(image_path, add_watermark=True):
             # Create a diagonal grid pattern of watermarks
             grid_spacing = 300  # Space between watermarks
             angle = 30  # Angle for diagonal pattern
+            margin = 20  # Define margin here to use in corner distance check
             
             for i in range(-2, int(img_width/grid_spacing) + 2):
                 for j in range(-2, int(img_height/grid_spacing) + 2):
                     pos_x = i * grid_spacing
                     pos_y = j * grid_spacing + (i * grid_spacing * 0.5)  # Create diagonal offset
                     
-                    # Skip if too close to center to avoid overlapping with main watermark
-                    center_distance = ((pos_x + small_text_width/2 - img_width/2)**2 + 
-                                     (pos_y + small_text_height/2 - img_height/2)**2)**0.5
-                    if center_distance < 150:
+                    # Skip if too close to bottom-right corner to avoid overlapping with main watermark
+                    br_corner_distance = ((pos_x + small_text_width/2 - (img_width - margin))**2 + 
+                                       (pos_y + small_text_height/2 - (img_height - margin))**2)**0.5
+                    if br_corner_distance < 150:
                         continue
                         
                     # Add semi-transparent watermark text
@@ -142,9 +144,10 @@ def convert_to_sketch(image_path, add_watermark=True):
             print(f"Error adding watermark: {str(e)}")
             # Fallback watermark if the complex method fails
             try:
-                # Simple text watermark as fallback
+                # Simple text watermark as fallback (bottom-right corner)
                 draw = ImageDraw.Draw(pil_img)
-                draw.text((img_width//2 - 100, img_height//2 - 30), 
+                margin = 20  # Margin from the edge
+                draw.text((img_width - 200 - margin, img_height - 60 - margin), 
                           "DRAW AI", font=font, fill=(255, 255, 255))
                 sketch = np.array(pil_img)
             except Exception as e2:
@@ -216,7 +219,7 @@ def add_watermark_to_base64_image(base64_string):
     watermark_text = "DRAW AI"  # Using uppercase for better visibility
     img_width, img_height = img.size
     
-    # Calculate position (center of image)
+    # Calculate position (bottom-right corner)
     try:
         # For newer versions of Pillow
         if hasattr(font, "getbbox"):  
@@ -227,15 +230,16 @@ def add_watermark_to_base64_image(base64_string):
             # Fallback to deprecated method for older Pillow versions
             text_width, text_height = draw.textsize(watermark_text, font=font)
             
-        x = (img_width - text_width) // 2
-        y = (img_height - text_height) // 2
+        margin = 20  # Margin from the edge
+        x = img_width - text_width - margin
+        y = img_height - text_height - margin
         
         # Create a watermark layer for the base64 image
         watermark_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
         wm_draw = ImageDraw.Draw(watermark_layer)
             
-        # Add main large centered watermark
-        padding = 40
+        # Add main large watermark in the bottom-right corner
+        padding = 20
         watermark_bg_coords = [
             (x - padding, y - padding),
             (x + text_width + padding, y + text_height + padding)
