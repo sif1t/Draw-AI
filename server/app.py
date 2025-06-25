@@ -247,15 +247,23 @@ def download_free_sketch(session_id):
         # Ensure the image has a watermark - create a fresh copy with watermark
         original_path = session_data.get("original_path", "")
         if os.path.exists(original_path):
-            # Generate a new watermarked version to ensure watermark is present
-            watermarked_sketch_path = sketch.convert_to_sketch(original_path, add_watermark=True)
-            
-            return send_file(
-                watermarked_sketch_path,
-                as_attachment=True,
-                download_name="draw_ai_free_sketch.jpg",
-                mimetype='image/jpeg'
-            )
+            try:
+                print(f"Generating watermarked version for download - original path: {original_path}")
+                # Generate a new watermarked version to ensure watermark is present
+                # Force watermark to be added and make it very prominent
+                watermarked_sketch_path = sketch.convert_to_sketch(original_path, add_watermark=True)
+                
+                print(f"Watermarked sketch generated at: {watermarked_sketch_path}")
+                
+                return send_file(
+                    watermarked_sketch_path,
+                    as_attachment=True,
+                    download_name="draw_ai_free_sketch.jpg",
+                    mimetype='image/jpeg'
+                )
+            except Exception as e:
+                print(f"Error generating watermarked sketch for download: {str(e)}")
+                # Fall back to stored sketch if watermarking fails
         else:
             # Fall back to the stored sketch if original is not available
             return send_file(

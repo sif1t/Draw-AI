@@ -13,10 +13,12 @@ def convert_to_sketch(image_path, add_watermark=True):
     Args:
         image_path: Path to the input image
         add_watermark: Boolean to determine if watermark should be added
+                      Default is True for free version
     
     Returns:
         Path to the generated sketch image
     """
+    print(f"Converting image to sketch. Add watermark: {add_watermark}")
     try:
         # Check if file exists
         if not os.path.exists(image_path):
@@ -53,13 +55,15 @@ def convert_to_sketch(image_path, add_watermark=True):
         pil_img = Image.fromarray(sketch)
         draw = ImageDraw.Draw(pil_img)
         
-        # Set font for watermark
+        # Set font for watermark - use larger font size
         try:
-            font = ImageFont.truetype("arial.ttf", 40)
+            font = ImageFont.truetype("arial.ttf", 60)  # Increased font size
         except:
             # If arial is not available, use default
-            font = ImageFont.load_default()        # Add watermark text
-        watermark_text = "Draw AI"
+            font = ImageFont.load_default()
+            
+        # Add watermark text
+        watermark_text = "DRAW AI"  # Using uppercase for better visibility
         img_width, img_height = pil_img.size
         
         # Calculate position (center of image)
@@ -76,23 +80,77 @@ def convert_to_sketch(image_path, add_watermark=True):
             x = (img_width - text_width) // 2
             y = (img_height - text_height) // 2
             
-            # Add more prominent watermark
-            # Add semi-transparent background for better visibility
-            padding = 20
+            # Create a new transparent layer for the watermark
+            watermark_layer = Image.new('RGBA', pil_img.size, (0, 0, 0, 0))
+            watermark_draw = ImageDraw.Draw(watermark_layer)
+            
+            # Add a large centered watermark
+            padding = 40
             watermark_bg_coords = [
                 (x - padding, y - padding),
                 (x + text_width + padding, y + text_height + padding)
             ]
-            draw.rectangle(watermark_bg_coords, fill=(50, 50, 50, 100))
+            # Dark background rectangle for the main watermark
+            watermark_draw.rectangle(watermark_bg_coords, fill=(0, 0, 0, 180))
             
-            # Add the watermark text
-            draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))
+            # Add the watermark text in white
+            watermark_draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255, 255))
+            
+            # Add a watermark pattern across the entire image
+            # Repeat the watermark in a grid pattern
+            smaller_font_size = 40
+            try:
+                smaller_font = ImageFont.truetype("arial.ttf", smaller_font_size)
+            except:
+                smaller_font = font
+                
+            if hasattr(smaller_font, "getbbox"):
+                bbox = smaller_font.getbbox(watermark_text)
+                small_text_width = bbox[2] - bbox[0]
+                small_text_height = bbox[3] - bbox[1]
+            else:
+                small_text_width, small_text_height = watermark_draw.textsize(watermark_text, font=smaller_font)
+            
+            # Create a diagonal grid pattern of watermarks
+            grid_spacing = 300  # Space between watermarks
+            angle = 30  # Angle for diagonal pattern
+            
+            for i in range(-2, int(img_width/grid_spacing) + 2):
+                for j in range(-2, int(img_height/grid_spacing) + 2):
+                    pos_x = i * grid_spacing
+                    pos_y = j * grid_spacing + (i * grid_spacing * 0.5)  # Create diagonal offset
+                    
+                    # Skip if too close to center to avoid overlapping with main watermark
+                    center_distance = ((pos_x + small_text_width/2 - img_width/2)**2 + 
+                                     (pos_y + small_text_height/2 - img_height/2)**2)**0.5
+                    if center_distance < 150:
+                        continue
+                        
+                    # Add semi-transparent watermark text
+                    watermark_draw.text((pos_x, pos_y), watermark_text, 
+                                        font=smaller_font, fill=(255, 255, 255, 100))
+            # Convert PIL RGBA to RGB and merge with original sketch
+            pil_img = pil_img.convert("RGB")
+            watermarked_img = Image.alpha_composite(
+                pil_img.convert("RGBA"),
+                watermark_layer
+            ).convert("RGB")
+            
+            # Convert back to OpenCV format
+            sketch = np.array(watermarked_img)
         except Exception as e:
             print(f"Error adding watermark: {str(e)}")
-            # Continue without watermark if there's an error
-        
-        # Convert back to OpenCV format
-        sketch = np.array(pil_img)
+            # Fallback watermark if the complex method fails
+            try:
+                # Simple text watermark as fallback
+                draw = ImageDraw.Draw(pil_img)
+                draw.text((img_width//2 - 100, img_height//2 - 30), 
+                          "DRAW AI", font=font, fill=(255, 255, 255))
+                sketch = np.array(pil_img)
+            except Exception as e2:
+                print(f"Fallback watermark also failed: {str(e2)}")
+                # Continue without watermark if all methods fail
+                sketch = np.array(pil_img)
       # Create a unique filename for the output
     output_filename = f"sketch_{uuid.uuid4().hex}.jpg"
     # Get the base directory of the script
@@ -147,14 +205,15 @@ def add_watermark_to_base64_image(base64_string):
     # Create a drawing object
     draw = ImageDraw.Draw(img)
     
-    # Set font for watermark
+    # Set font for watermark - use larger font size
     try:
-        font = ImageFont.truetype("arial.ttf", 40)
+        font = ImageFont.truetype("arial.ttf", 60)  # Increased font size
     except:
         # If arial is not available, use default
         font = ImageFont.load_default()
-      # Add watermark text
-    watermark_text = "Draw AI"
+      
+    # Add watermark text
+    watermark_text = "DRAW AI"  # Using uppercase for better visibility
     img_width, img_height = img.size
     
     # Calculate position (center of image)
@@ -171,20 +230,71 @@ def add_watermark_to_base64_image(base64_string):
         x = (img_width - text_width) // 2
         y = (img_height - text_height) // 2
         
-        # Add semi-transparent background for better visibility
-        padding = 20
+        # Create a watermark layer for the base64 image
+        watermark_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        wm_draw = ImageDraw.Draw(watermark_layer)
+            
+        # Add main large centered watermark
+        padding = 40
         watermark_bg_coords = [
             (x - padding, y - padding),
             (x + text_width + padding, y + text_height + padding)
         ]
-        draw.rectangle(watermark_bg_coords, fill=(50, 50, 50, 100))
-        
-        # Add the watermark text
-        draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))
+        # Dark background for high visibility
+        wm_draw.rectangle(watermark_bg_coords, fill=(0, 0, 0, 200))
+            
+        # Add the watermark text in bright white
+        wm_draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255, 255))
+            
+        # Add watermark pattern across the image
+        smaller_font_size = 40
+        try:
+            smaller_font = ImageFont.truetype("arial.ttf", smaller_font_size)
+        except:
+            smaller_font = font
+            
+        if hasattr(smaller_font, "getbbox"):
+            bbox = smaller_font.getbbox(watermark_text)
+            small_text_width = bbox[2] - bbox[0]
+            small_text_height = bbox[3] - bbox[1]
+        else:
+            small_text_width, small_text_height = wm_draw.textsize(watermark_text, font=smaller_font)
+            
+        # Create pattern of watermarks across the image
+        grid_spacing = 300
+        for i in range(-1, int(img_width/grid_spacing) + 1):
+            for j in range(-1, int(img_height/grid_spacing) + 1):
+                pos_x = i * grid_spacing
+                pos_y = j * grid_spacing + (i * grid_spacing * 0.5)
+                
+                # Skip if too close to center
+                center_distance = ((pos_x - img_width/2)**2 + (pos_y - img_height/2)**2)**0.5
+                if center_distance < 150:
+                    continue
+                    
+                # Add semi-transparent watermarks
+                wm_draw.text((pos_x, pos_y), watermark_text, font=smaller_font, fill=(255, 255, 255, 120))
+                
+        # Merge watermark with original image
+        img = Image.alpha_composite(img.convert("RGBA"), watermark_layer).convert("RGB")
     except Exception as e:
         # If there's an error with the improved watermark, fall back to simple watermark
         print(f"Error adding enhanced watermark: {str(e)}")
-        draw.text((img_width // 2, img_height // 2), watermark_text, font=font, fill=(255, 255, 255))
+        try:
+            # Simple fallback watermark - large text with strong contrast
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([
+                (img_width//2 - 150, img_height//2 - 40),
+                (img_width//2 + 150, img_height//2 + 40)
+            ], fill=(0, 0, 0))
+            draw.text(
+                (img_width//2 - 100, img_height//2 - 30), 
+                "DRAW AI", 
+                font=font, 
+                fill=(255, 255, 255)
+            )
+        except Exception as e2:
+            print(f"Even simple watermark failed: {str(e2)}")
     
     # Convert back to base64
     buffered = io.BytesIO()
