@@ -6,6 +6,7 @@ import axios from 'axios';
 const ImageUploader = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
+    const [sketchStyle, setSketchStyle] = useState('pencil'); // Default style
     const navigate = useNavigate();
 
     const onDrop = useCallback(async (acceptedFiles) => {
@@ -36,9 +37,11 @@ const ImageUploader = () => {
             // Create form data
             const formData = new FormData();
             formData.append('image', file);
+            formData.append('style', sketchStyle); // Add the selected style
             console.log('File added to form data:', file.name, file.type, file.size);
+            console.log('Using sketch style:', sketchStyle);
 
-            const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/convert`;
+            const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/convert/style`;
             console.log('Sending request to:', apiUrl);
 
             // Send to backend with better error handling
@@ -63,7 +66,8 @@ const ImageUploader = () => {
                         state: {
                             sketch: response.data.sketch,
                             sessionId: response.data.session_id,
-                            originalImage: URL.createObjectURL(file)
+                            originalImage: URL.createObjectURL(file),
+                            style: response.data.style || sketchStyle
                         }
                     });
                 } else {
@@ -93,12 +97,40 @@ const ImageUploader = () => {
         } finally {
             setIsUploading(false);
         }
-    }, [navigate]);
+    }, [navigate, sketchStyle]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop });
 
     return (
         <div className="w-full max-w-lg mx-auto">
+            {/* Style Selection */}
+            <div className="mb-6">
+                <h3 className="text-lg font-medium text-gray-700 mb-2">Choose Sketch Style</h3>
+                <div className="flex flex-wrap gap-3 justify-center">
+                    <button
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'pencil' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('pencil')}
+                    >
+                        Pencil Sketch
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'realistic' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('realistic')}
+                    >
+                        Realistic Sketch
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'portrait' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('portrait')}
+                    >
+                        Artistic Portrait
+                    </button>
+                </div>
+                <div className="mt-2 text-center text-xs text-gray-500">
+                    Artistic Portrait generates professional-quality sketches like the examples shown
+                </div>
+            </div>
+
             <div
                 {...getRootProps()}
                 className={`drop-zone ${isDragActive ? 'active' : ''}`}

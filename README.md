@@ -1,15 +1,20 @@
-# Draw AI
+# Draw AI - Professional Pencil Sketch Generator
 
-Draw AI is a full-featured web application that allows users to upload an image and convert it into a realistic pencil sketch using Python-based image processing. The app includes a free sketch preview (with watermark) and a premium download option (without watermark) through an integrated payment system.
+Draw AI is a full-featured web application that allows users to upload an image and convert it into professional-quality pencil sketches using advanced image processing. The app includes free sketch creation with multiple artistic styles and a premium download option (without watermark) through an integrated payment system.
 
 ## Features
 
+- **Multiple Professional Sketch Styles**:
+  - **Basic Pencil Sketch**: Clean, high-contrast pencil sketch style
+  - **Realistic Pencil Sketch**: Natural-looking sketch with smooth shading
+  - **Artistic Portrait**: Professional artist-quality sketch similar to hand-drawn portraits
 - Image Upload (JPG/PNG)
-- AI-powered Sketch Generator
+- AI-powered Advanced Sketch Generator
 - Preview Output with Watermark
 - Premium Purchase Option ($1)
 - Stripe Payment Integration
 - Mobile Responsive Design
+- Standalone Command-Line Tool
 
 ## Tech Stack
 
@@ -114,3 +119,31 @@ The app uses Stripe for payment processing. When a user clicks "Remove Watermark
 - Bulk processing of multiple images
 - Email delivery of sketches
 - Admin dashboard for analytics
+
+## Standalone Tool Usage
+
+For those who prefer using a command-line interface, the standalone sketch tool is available:
+
+```
+python standalone_sketch.py [image_path] [-o output_path] [-m mode]
+```
+
+Options:
+- `image_path`: Path to the input image (required)
+- `-o, --output`: Path to save the output image (optional)
+- `-m, --mode`: Sketch mode - 'regular', 'realistic', or 'artistic' (default: 'artistic')
+
+Example:
+```
+python standalone_sketch.py my_photo.jpg -o my_sketch.jpg -m artistic
+```
+
+## Testing Tool
+
+To compare all available sketch styles on a single image:
+
+```
+python server/test_all_sketch_styles.py [image_path] [-o output_directory]
+```
+
+This will generate all three types of sketches and save them in the specified directory.

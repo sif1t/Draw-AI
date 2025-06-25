@@ -4,6 +4,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import sketch
+import improved_sketch  # Import the improved sketch module
 import payments
 from werkzeug.utils import secure_filename
 import uuid
@@ -73,11 +74,12 @@ def convert_image():
             print(f"Processing file: {filepath}")
             print(f"File exists: {os.path.exists(filepath)}")
             
-            sketch_path = sketch.convert_to_sketch(filepath, add_watermark=True)
+            # Use the improved sketch implementation instead
+            sketch_path = improved_sketch.convert_to_pencil_sketch(filepath, add_watermark=True)
             print(f"Generated sketch at: {sketch_path}")
             print(f"Sketch exists: {os.path.exists(sketch_path)}")
             
-            sketch_base64 = sketch.convert_to_base64(sketch_path)
+            sketch_base64 = improved_sketch.convert_to_base64(sketch_path)
             
             # Store original path for premium conversion
             session_id = uuid.uuid4().hex
@@ -105,6 +107,79 @@ def convert_image():
             return jsonify({"error": str(e), "details": error_details}), 500
     
     return jsonify({"error": "File type not allowed"}), 400
+
+@app.route('/api/convert/style', methods=['POST'])
+def convert_image_with_style():
+    """
+    Endpoint to convert an uploaded image to a pencil sketch with different style options
+    """
+    # Check if image is in the request
+    if 'image' not in request.files:
+        return jsonify({"error": "No image part"}), 400
+    
+    file = request.files['image']
+    
+    # Check if file is selected
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    
+    # Get style parameter (default to 'pencil')
+    style = request.form.get('style', 'pencil')
+    
+    # Check if file type is allowed
+    if file and allowed_file(file.filename):
+        # Generate a secure filename to prevent path traversal attacks
+        filename = secure_filename(file.filename)
+        # Add a UUID to make it unique
+        unique_filename = f"{uuid.uuid4().hex}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        # Save the uploaded file
+        file.save(filepath)
+        
+        # Convert to sketch with watermark based on style
+        try:
+            print(f"Processing file: {filepath} with style: {style}")
+            
+            if style == 'pencil':
+                sketch_path = improved_sketch.convert_to_pencil_sketch(filepath, add_watermark=True)
+            elif style == 'realistic':
+                sketch_path = improved_sketch.convert_to_realistic_pencil_sketch(filepath, add_watermark=True)
+            elif style == 'portrait':
+                sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
+            else:
+                # Default to artistic portrait sketch for best results
+                sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
+            
+            print(f"Generated sketch at: {sketch_path}")
+            
+            sketch_base64 = improved_sketch.convert_to_base64(sketch_path)
+            
+            # Store original path for premium conversion
+            session_id = uuid.uuid4().hex
+            session_data = {
+                "original_path": filepath,
+                "sketch_path": sketch_path,
+                "style": style,
+                "paid": False
+            }
+            
+            # Save session data to temporary file
+            with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'w') as f:
+                json.dump(session_data, f)
+            
+            return jsonify({
+                "success": True,
+                "sketch": sketch_base64,
+                "session_id": session_id,
+                "style": style
+            })
+            
+        except Exception as e:
+            print(f"Error converting image: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+    
+    return jsonify({"error": "Invalid file type"}), 400
 
 @app.route('/api/create-checkout-session', methods=['POST'])
 def create_checkout():
