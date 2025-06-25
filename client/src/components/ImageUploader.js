@@ -31,36 +31,65 @@ const ImageUploader = () => {
         setIsUploading(true);
 
         try {
+            console.log('Starting upload process');
+
             // Create form data
             const formData = new FormData();
             formData.append('image', file);
+            console.log('File added to form data:', file.name, file.type, file.size);
 
-            // Send to backend
-            const response = await axios.post(
-                `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/convert`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
+            const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/convert`;
+            console.log('Sending request to:', apiUrl);
+
+            // Send to backend with better error handling
+            try {
+                const response = await axios.post(
+                    apiUrl,
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        },
+                        // Increase timeout for large images
+                        timeout: 30000
                     }
+                );
+
+                console.log('Response received:', response.data);
+
+                if (response.data.success) {
+                    // Navigate to result page with sketch data
+                    navigate('/result', {
+                        state: {
+                            sketch: response.data.sketch,
+                            sessionId: response.data.session_id,
+                            originalImage: URL.createObjectURL(file)
+                        }
+                    });
+                } else {
+                    console.error('API returned success=false:', response.data);
+                    setUploadError(`Failed to convert image: ${response.data.error || 'Unknown error'}`);
                 }
-            );
+            } catch (axiosError) {
+                console.error('Axios error details:', axiosError);
 
-            if (response.data.success) {
-                // Navigate to result page with sketch data
-                navigate('/result', {
-                    state: {
-                        sketch: response.data.sketch,
-                        sessionId: response.data.session_id,
-                        originalImage: URL.createObjectURL(file)
-                    }
-                });
-            } else {
-                setUploadError('Failed to convert image. Please try again.');
+                if (axiosError.response) {
+                    // Server responded with non-2xx status code
+                    console.error('Error response:', axiosError.response.data);
+                    setUploadError(`Server error: ${axiosError.response.data.error || axiosError.response.status}`);
+                } else if (axiosError.request) {
+                    // Request was made but no response received
+                    console.error('No response received');
+                    setUploadError('Server not responding. Please check your connection.');
+                } else {
+                    // Error setting up the request
+                    console.error('Request setup error');
+                    setUploadError(`Request error: ${axiosError.message}`);
+                }
             }
         } catch (error) {
-            console.error('Upload error:', error);
-            setUploadError('An error occurred. Please try again later.');
+            console.error('General error:', error);
+            setUploadError(`An error occurred: ${error.message}`);
         } finally {
             setIsUploading(false);
         }

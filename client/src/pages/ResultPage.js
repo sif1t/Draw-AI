@@ -10,30 +10,36 @@ const ResultPage = () => {
     const [sessionId, setSessionId] = useState(null);
     const [premiumSketch, setPremiumSketch] = useState(null);
     const [paymentSuccess, setPaymentSuccess] = useState(false);
-    const [downloadUrl, setDownloadUrl] = useState(null);
-
-    // Parse URL parameters for payment success
+    const [downloadUrl, setDownloadUrl] = useState(null);    // Parse URL parameters for payment success
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const paymentStatus = params.get('payment_status');
-        const paymentIntent = params.get('payment_intent');
         const sessionIdParam = params.get('session_id');
 
-        if (paymentStatus === 'success' && sessionIdParam && paymentIntent) {
+        if (paymentStatus === 'success' && sessionIdParam) {
             setPaymentSuccess(true);
             setSessionId(sessionIdParam);
 
             // Fetch the premium sketch
             const fetchPremiumSketch = async () => {
                 try {
+                    console.log("Fetching premium sketch for session:", sessionIdParam);
                     const response = await fetch(
-                        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/payment-success?session_id=${sessionIdParam}&payment_intent=${paymentIntent}`
+                        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/payment-success?session_id=${sessionIdParam}`
                     );
+
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+
                     const data = await response.json();
+                    console.log("Premium sketch response:", data);
 
                     if (data.success) {
                         setPremiumSketch(`data:image/jpeg;base64,${data.premium_sketch}`);
                         setDownloadUrl(data.download_url);
+                    } else {
+                        console.error('Failed to get premium sketch:', data.error);
                     }
                 } catch (error) {
                     console.error('Failed to fetch premium sketch:', error);
@@ -64,13 +70,17 @@ const ResultPage = () => {
             // Redirect to home if no state and not coming from payment
             navigate('/');
         }
-    }, [location, navigate, paymentSuccess]);
-
-    const handleDownload = (imageUrl, isPremium) => {
-        const link = document.createElement('a');
-        link.href = imageUrl;
-        link.download = isPremium ? 'premium_sketch.jpg' : 'free_sketch.jpg';
-        link.click();
+    }, [location, navigate, paymentSuccess]); const handleDownload = (imageUrl, isPremium) => {
+        if (isPremium) {
+            // Download from data URL for premium sketch during preview
+            const link = document.createElement('a');
+            link.href = imageUrl;
+            link.download = 'premium_sketch.jpg';
+            link.click();
+        } else {
+            // Use the API endpoint to ensure watermark is applied
+            window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/download/free/${sessionId}`;
+        }
     };
 
     if (!sketchImage && !premiumSketch) {

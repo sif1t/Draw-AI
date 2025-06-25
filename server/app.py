@@ -6,18 +6,27 @@ import payments
 from werkzeug.utils import secure_filename
 import uuid
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# Enable CORS for all routes with more permissive settings
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
-# Configure file upload settings
-UPLOAD_FOLDER = 'uploads'
-TEMP_FOLDER = 'temp'
+# Configure file upload settings with absolute paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+TEMP_FOLDER = os.path.join(BASE_DIR, 'temp')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 # Create required directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
+
+print(f"Upload folder: {UPLOAD_FOLDER}")
+print(f"Temp folder: {TEMP_FOLDER}")
 
 # Set up upload folder
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -56,10 +65,16 @@ def convert_image():
         
         # Save the uploaded file
         file.save(filepath)
-        
-        # Convert to sketch with watermark
+          # Convert to sketch with watermark
         try:
+            # Print file path for debugging
+            print(f"Processing file: {filepath}")
+            print(f"File exists: {os.path.exists(filepath)}")
+            
             sketch_path = sketch.convert_to_sketch(filepath, add_watermark=True)
+            print(f"Generated sketch at: {sketch_path}")
+            print(f"Sketch exists: {os.path.exists(sketch_path)}")
+            
             sketch_base64 = sketch.convert_to_base64(sketch_path)
             
             # Store original path for premium conversion
@@ -81,7 +96,11 @@ def convert_image():
             })
             
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error in image conversion: {str(e)}")
+            print(error_details)
+            return jsonify({"error": str(e), "details": error_details}), 500
     
     return jsonify({"error": "File type not allowed"}), 400
 
@@ -98,14 +117,16 @@ def create_checkout():
         if not session_id or not os.path.exists(os.path.join(TEMP_FOLDER, f"{session_id}.json")):
             return jsonify({"error": "Invalid session ID"}), 400
         
-        # Create success and cancel URLs
-        success_url = f"{request.host_url}api/payment-success?session_id={session_id}"
-        cancel_url = f"{request.host_url}api/payment-cancel?session_id={session_id}"
+        # Create success and cancel URLs with frontend redirect
+        # These URLs should point to your frontend app, not the backend API
+        frontend_url = request.headers.get('Origin', 'http://localhost:3000')
+        success_url = f"{frontend_url}/result?payment_status=success&session_id={session_id}"
+        cancel_url = f"{frontend_url}/result?payment_status=cancelled&session_id={session_id}"
         
         # Create Stripe checkout session
         checkout_session = payments.create_checkout_session(
-            # Replace with your actual price ID from Stripe dashboard
-            price_id="price_1234567890",
+            # Get price ID from environment variable
+            price_id=os.getenv('STRIPE_PRICE_ID'),
             success_url=success_url,
             cancel_url=cancel_url
         )
@@ -113,21 +134,54 @@ def create_checkout():
         return jsonify(checkout_session)
     
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error creating checkout session: {str(e)}")
+        print(error_details)
+        
+        # Check for common Stripe errors
+        error_msg = str(e)
+        if "API key" in error_msg:
+            return jsonify({"error": "Payment system configuration error. Please check Stripe API keys."}), 500
+        
+        return jsonify({"error": error_msg, "details": error_details}), 500
 
-@app.route('/api/payment-success', methods=['GET'])
+@app.route('/api/payment-success', methods=['GET', 'POST'])
 def payment_success():
     """
     Handle successful payment and generate premium sketch
     """
-    session_id = request.args.get('session_id')
-    payment_intent = request.args.get('payment_intent')
+    # Handle both GET and POST requests
+    if request.method == 'GET':
+        session_id = request.args.get('session_id')
+        payment_intent = request.args.get('payment_intent')
+    else:
+        data = request.json
+        session_id = data.get('session_id')
+        payment_intent = data.get('payment_intent')
+    
+    # Debug output
+    print(f"Payment success request received - Session ID: {session_id}, Payment Intent: {payment_intent}")
     
     # Validate session ID
     if not session_id or not os.path.exists(os.path.join(TEMP_FOLDER, f"{session_id}.json")):
         return jsonify({"error": "Invalid session ID"}), 400
     
+    # Get session data
+    with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
+        session_data = json.load(f)
+    
+    # If already paid, return existing premium sketch
+    if session_data.get("paid") and os.path.exists(session_data.get("premium_sketch_path", "")):
+        premium_sketch_base64 = sketch.convert_to_base64(session_data["premium_sketch_path"])
+        return jsonify({
+            "success": True,
+            "premium_sketch": premium_sketch_base64,
+            "download_url": f"/api/download/{session_id}"
+        })
+    
     # Verify payment (in a real app, you would verify with Stripe)
+    payment_verified = True
     if payment_intent:
         payment_verified = payments.verify_payment_intent(payment_intent)
         if not payment_verified:
@@ -173,10 +227,10 @@ def payment_cancel():
         "message": "Payment was cancelled"
     })
 
-@app.route('/api/download/<session_id>', methods=['GET'])
-def download_sketch(session_id):
+@app.route('/api/download/free/<session_id>', methods=['GET'])
+def download_free_sketch(session_id):
     """
-    Download the premium sketch
+    Download the free sketch with watermark
     """
     # Validate session ID
     if not session_id or not os.path.exists(os.path.join(TEMP_FOLDER, f"{session_id}.json")):
@@ -186,17 +240,50 @@ def download_sketch(session_id):
     with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
         session_data = json.load(f)
     
-    # Check if premium sketch exists and is paid for
-    if not session_data.get("paid") or not os.path.exists(session_data.get("premium_sketch_path", "")):
-        return jsonify({"error": "Premium sketch not available"}), 403
+    # Send the free version (with watermark) for download
+    if os.path.exists(session_data.get("sketch_path", "")):
+        return send_file(
+            session_data["sketch_path"],
+            as_attachment=True,
+            download_name="draw_ai_free_sketch.jpg",
+            mimetype='image/jpeg'
+        )
+    else:
+        return jsonify({"error": "Sketch file not found"}), 404
+
+@app.route('/api/download/<session_id>', methods=['GET'])
+def download_sketch(session_id):
+    """
+    Download the sketch (premium or free with watermark)
+    """
+    # Validate session ID
+    if not session_id or not os.path.exists(os.path.join(TEMP_FOLDER, f"{session_id}.json")):
+        return jsonify({"error": "Invalid session ID"}), 400
     
-    # Send the file for download
-    return send_file(
-        session_data["premium_sketch_path"],
-        as_attachment=True,
-        download_name="premium_sketch.jpg",
-        mimetype='image/jpeg'
-    )
+    # Get session data
+    with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
+        session_data = json.load(f)
+    
+    # Check if this is a premium (paid) download
+    if session_data.get("paid") and os.path.exists(session_data.get("premium_sketch_path", "")):
+        # Send the premium file for download
+        return send_file(
+            session_data["premium_sketch_path"],
+            as_attachment=True,
+            download_name="premium_sketch.jpg",
+            mimetype='image/jpeg'
+        )
+    else:
+        # Send the free version (with watermark) for download
+        if os.path.exists(session_data.get("sketch_path", "")):
+            return send_file(
+                session_data["sketch_path"],
+                as_attachment=True,
+                download_name="free_sketch.jpg",
+                mimetype='image/jpeg'
+            )
+        else:
+            return jsonify({"error": "Sketch file not found"}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

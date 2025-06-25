@@ -3,28 +3,43 @@ import axios from 'axios';
 
 const PaymentButton = ({ sessionId, onPaymentSuccess }) => {
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null);
-
-    const handlePayment = async () => {
+    const [error, setError] = useState(null); const handlePayment = async () => {
         setIsLoading(true);
         setError(null);
 
         try {
+            console.log('Initiating payment for session:', sessionId);
+
             // Create Stripe checkout session
             const response = await axios.post(
                 `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/create-checkout-session`,
                 { session_id: sessionId }
             );
 
+            console.log('Checkout session response:', response.data);
+
             if (response.data.url) {
                 // Redirect to Stripe Checkout
                 window.location.href = response.data.url;
+            } else if (response.data.error) {
+                throw new Error(response.data.error);
             } else {
                 throw new Error('Failed to create checkout session');
             }
         } catch (error) {
             console.error('Payment error:', error);
-            setError('Failed to initialize payment. Please try again.');
+
+            // Extract useful error information from various possible error formats
+            let errorMessage;
+            if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error.message && error.message.includes('API Key')) {
+                errorMessage = 'Payment system configuration error. Please contact support.';
+            } else {
+                errorMessage = error.message || 'Failed to initialize payment. Please try again.';
+            }
+
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }
