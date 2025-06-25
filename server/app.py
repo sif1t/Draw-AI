@@ -180,12 +180,14 @@ def payment_success():
             "download_url": f"/api/download/{session_id}"
         })
     
-    # Verify payment (in a real app, you would verify with Stripe)
+    # Verify payment with our local payment system
     payment_verified = True
-    if payment_intent:
-        payment_verified = payments.verify_payment_intent(payment_intent)
+    
+    # For our local system, the payment ID is stored in session_id parameter
+    if session_id:
+        payment_verified = payments.verify_payment_intent(session_id)
         if not payment_verified:
-            return jsonify({"error": "Payment verification failed"}), 400
+            return jsonify({"error": "Payment verification failed. Please complete the payment process."}), 400
     
     # Get session data
     with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
@@ -284,6 +286,118 @@ def download_sketch(session_id):
             )
         else:
             return jsonify({"error": "Sketch file not found"}), 404
+
+# Creating a new route for payment checkout page
+@app.route('/payment/checkout', methods=['GET'])
+def payment_checkout():
+    """
+    Render a simple payment form for the local payment system
+    """
+    payment_id = request.args.get('payment_id')
+    
+    # Return HTML for a simple payment form
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Draw AI - Payment</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+            .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            h1 {{ color: #333; text-align: center; margin-bottom: 20px; }}
+            .form-group {{ margin-bottom: 15px; }}
+            label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
+            input {{ width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }}
+            button {{ background-color: #ff5c38; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }}
+            button:hover {{ background-color: #e64a2e; }}
+            .note {{ font-size: 12px; color: #666; margin-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Draw AI - Payment</h1>
+            <p>Complete your purchase to remove the watermark</p>
+            <form id="payment-form" action="/payment/process" method="post">
+                <input type="hidden" name="payment_id" value="{payment_id}">
+                
+                <div class="form-group">
+                    <label for="card-number">Card Number</label>
+                    <input type="text" id="card-number" name="card_number" placeholder="1234 5678 9012 3456" maxlength="16" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expiry">Expiration Date</label>
+                    <input type="text" id="expiry" name="expiry" placeholder="MM/YY" maxlength="5" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cvc">CVC</label>
+                    <input type="text" id="cvc" name="cvc" placeholder="123" maxlength="3" required>
+                </div>
+                
+                <button type="submit">Pay $1.00</button>
+                
+                <div class="note">
+                    <p>This is a test payment system. Use card number ending in 4242 to simulate successful payment.</p>
+                </div>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+@app.route('/payment/process', methods=['POST'])
+def process_payment():
+    """
+    Process the payment form submission
+    """
+    payment_id = request.form.get('payment_id')
+    card_number = request.form.get('card_number')
+    expiry = request.form.get('expiry')
+    cvc = request.form.get('cvc')
+    
+    # Basic validation
+    if not all([payment_id, card_number, expiry, cvc]):
+        return jsonify({"error": "Missing payment information"}), 400
+    
+    # Process payment
+    result = payments.process_payment(payment_id, card_number, expiry, cvc)
+    
+    if result['success']:
+        # Redirect to success URL
+        return f"""
+        <html>
+        <head>
+            <title>Payment Successful</title>
+            <script>
+                window.location.href = "{result['redirect_url']}";
+            </script>
+        </head>
+        <body>
+            <h1>Payment Successful</h1>
+            <p>Redirecting to download page...</p>
+        </body>
+        </html>
+        """
+    else:
+        # Redirect to cancel URL with error
+        return f"""
+        <html>
+        <head>
+            <title>Payment Failed</title>
+            <script>
+                window.location.href = "{result['redirect_url']}";
+            </script>
+        </head>
+        <body>
+            <h1>Payment Failed</h1>
+            <p>Error: {result.get('error', 'Unknown error')}</p>
+            <p>Redirecting...</p>
+        </body>
+        </html>
+        """
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

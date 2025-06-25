@@ -10,7 +10,7 @@ const PaymentButton = ({ sessionId, onPaymentSuccess }) => {
         try {
             console.log('Initiating payment for session:', sessionId);
 
-            // Create Stripe checkout session
+            // Create checkout session with our local payment system
             const response = await axios.post(
                 `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/create-checkout-session`,
                 { session_id: sessionId }
@@ -19,8 +19,8 @@ const PaymentButton = ({ sessionId, onPaymentSuccess }) => {
             console.log('Checkout session response:', response.data);
 
             if (response.data.url) {
-                // Redirect to Stripe Checkout
-                window.location.href = response.data.url;
+                // Redirect to local payment page
+                window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${response.data.url}`;
             } else if (response.data.error) {
                 throw new Error(response.data.error);
             } else {
