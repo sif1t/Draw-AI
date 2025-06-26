@@ -129,11 +129,11 @@ const ImageUploader = () => {
                         className={`px-4 py-2 rounded-md ${sketchStyle === 'ultra-clear' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
                         onClick={() => setSketchStyle('ultra-clear')}
                     >
-                        Ultra-Clear
+                        Authentic Pencil
                     </button>
                 </div>
                 <div className="mt-2 text-center text-xs text-gray-500">
-                    Ultra-Clear delivers the sharpest, most defined pencil lines with maximum clarity
+                    Authentic Pencil creates truly realistic hand-drawn sketch effects
                 </div>
             </div>
 

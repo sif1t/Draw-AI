@@ -124,12 +124,12 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
             result = cv2.convertScaleAbs(result, alpha=1.2, beta=5)
             
         elif mode == "ultra-clear":
-            # Ultra-clear sketch with maximum clarity and line definition
+            # Authentic pencil sketch that mimics real hand-drawn artwork
             
-            # Convert to grayscale with optimal weights for clarity
+            # Convert to grayscale with natural pencil-friendly weights
             if len(img.shape) == 3:
                 b, g, r = cv2.split(img)
-                gray = cv2.addWeighted(cv2.addWeighted(r, 0.4, g, 0.4, 0), 0.8, b, 0.2, 0)
+                gray = cv2.addWeighted(cv2.addWeighted(r, 0.35, g, 0.45, 0), 0.8, b, 0.2, 0)
             else:
                 gray = img.copy()
             
@@ -215,7 +215,7 @@ def main():
     parser.add_argument('image_path', help='Path to the input image')
     parser.add_argument('-o', '--output', help='Path to save the output image')
     parser.add_argument('-m', '--mode', choices=['regular', 'realistic', 'artistic', 'ultra-clear'], 
-                        default='artistic', help='Sketch mode (default: artistic)')
+                        default='artistic', help='Sketch mode: "regular" (basic), "realistic" (shaded), "artistic" (portrait), or "ultra-clear" (authentic hand-drawn) (default: artistic)')
     
     args = parser.parse_args()
     
