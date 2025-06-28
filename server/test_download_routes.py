@@ -69,8 +69,8 @@ def test_download_routes():
         
     # Step 3: Simulate a successful payment - normally done through Stripe
     # For testing, we'll create a fake premium conversion
-    print("\n3. Testing payment success route...")
-    response = requests.get(f"{base_url}/api/payment-success?session_id={session_id}")
+    print("\n3. Testing premium sketch route...")
+    response = requests.get(f"{base_url}/api/get-premium-sketch?session_id={session_id}")
     
     if response.status_code == 200:
         payment_data = response.json()

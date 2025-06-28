@@ -311,10 +311,10 @@ def payment_success():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/payment-success', methods=['GET'])
-def payment_success():
+@app.route('/api/get-premium-sketch', methods=['GET'])
+def get_premium_sketch():
     """
-    Endpoint to handle payment success and return premium sketch without watermark
+    Endpoint to retrieve premium sketch without watermark (renamed to avoid conflict)
     """
     try:
         # Get session ID from query parameters

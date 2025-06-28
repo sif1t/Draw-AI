@@ -25,7 +25,7 @@ const ResultPage = () => {
                 try {
                     console.log("Fetching premium sketch for session:", sessionIdParam);
                     const response = await fetch(
-                        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/payment-success?session_id=${sessionIdParam}`
+                        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/get-premium-sketch?session_id=${sessionIdParam}`
                     );
 
                     if (!response.ok) {
