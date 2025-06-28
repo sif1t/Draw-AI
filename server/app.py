@@ -311,61 +311,209 @@ def payment_success():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/payment-cancel', methods=['GET'])
-def payment_cancel():
+@app.route('/api/payment-success', methods=['GET'])
+def payment_success():
     """
-    Handle cancelled payment
+    Endpoint to handle payment success and return premium sketch without watermark
     """
-    return jsonify({
-        "success": False,
-        "message": "Payment was cancelled"
-    })
+    try:
+        # Get session ID from query parameters
+        session_id = request.args.get('session_id')
+        if not session_id:
+            return jsonify({"error": "No session ID provided"}), 400
+            
+        # Check if session data exists
+        session_file = os.path.join(TEMP_FOLDER, f"{session_id}.json")
+        if not os.path.exists(session_file):
+            return jsonify({"error": "Invalid session ID"}), 400
+            
+        # Load session data
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+        
+        # Mark as paid in session data
+        session_data["paid"] = True
+        with open(session_file, 'w') as f:
+            json.dump(session_data, f)
+        
+        # Get the original image path
+        original_path = session_data.get("original_path")
+        if not original_path or not os.path.exists(original_path):
+            return jsonify({"error": "Original image not found"}), 404
+        
+        # Get the style
+        style = session_data.get("style", "pencil")
+        
+        # Generate a premium sketch without watermark
+        try:
+            print(f"Generating premium sketch without watermark for style: {style}")
+            
+            # Use the original style for the premium version
+            if style == 'pencil':
+                premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'realistic':
+                premium_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'portrait':
+                premium_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=False)
+            elif style == 'ultra-clear':
+                premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
+            else:
+                premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
+                
+            print(f"Generated premium sketch at: {premium_path}")
+            
+            # Store the premium path in session data
+            session_data["premium_path"] = premium_path
+            with open(session_file, 'w') as f:
+                json.dump(session_data, f)
+            
+            # Convert to base64 for preview
+            premium_base64 = improved_sketch.convert_to_base64(premium_path)
+            
+            # Create a download URL
+            download_url = f"/api/download/premium/{session_id}"
+            
+            return jsonify({
+                "success": True,
+                "premium_sketch": premium_base64,
+                "download_url": download_url
+            })
+            
+        except Exception as e:
+            print(f"Error generating premium sketch: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+            
+    except Exception as e:
+        print(f"Error during payment success: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/download/premium/<session_id>', methods=['GET'])
+def download_premium_sketch(session_id):
+    """
+    Endpoint to download the premium version without watermark
+    """
+    try:
+        # Check if session data exists
+        session_file = os.path.join(TEMP_FOLDER, f"{session_id}.json")
+        if not os.path.exists(session_file):
+            return jsonify({"error": "Invalid session ID"}), 400
+            
+        # Load session data
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+        
+        # Check if payment was made
+        if not session_data.get("paid", False):
+            return jsonify({"error": "Payment required"}), 402
+        
+        # Get the premium sketch path
+        premium_path = session_data.get("premium_path")
+        if not premium_path or not os.path.exists(premium_path):
+            # If premium path is not found, regenerate it
+            original_path = session_data.get("original_path")
+            style = session_data.get("style", "pencil")
+            
+            if not original_path or not os.path.exists(original_path):
+                return jsonify({"error": "Original image not found"}), 404
+                
+            print(f"Re-generating premium sketch for style: {style}")
+            
+            if style == 'pencil':
+                premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'realistic':
+                premium_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'portrait':
+                premium_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=False)
+            elif style == 'ultra-clear':
+                premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
+            else:
+                premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
+                
+            # Update session data with premium path
+            session_data["premium_path"] = premium_path
+            with open(session_file, 'w') as f:
+                json.dump(session_data, f)
+        
+        # Set a better filename for the download
+        style = session_data.get("style", "pencil")
+        download_filename = f"Draw_AI_Premium_{style}_{session_id[:8]}.jpg"
+        
+        # Return the file for download
+        return send_file(
+            premium_path,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype='image/jpeg'
+        )
+        
+    except Exception as e:
+        print(f"Error during premium sketch download: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/download/free/<session_id>', methods=['GET'])
 def download_free_sketch(session_id):
     """
-    Download the free sketch with watermark
+    Endpoint to download the free version with the Draw AI watermark
     """
-    # Validate session ID
-    if not session_id or not os.path.exists(os.path.join(TEMP_FOLDER, f"{session_id}.json")):
-        return jsonify({"error": "Invalid session ID"}), 400
-    
-    # Get session data
-    with open(os.path.join(TEMP_FOLDER, f"{session_id}.json"), 'r') as f:
-        session_data = json.load(f)
-    
-    # Send the free version (with watermark) for download
-    if os.path.exists(session_data.get("sketch_path", "")):
-        # Ensure the image has a watermark - create a fresh copy with watermark
-        original_path = session_data.get("original_path", "")
-        if os.path.exists(original_path):
-            try:
-                print(f"Generating watermarked version for download - original path: {original_path}")
-                # Generate a new watermarked version to ensure watermark is present
-                # Force watermark to be added and make it very prominent
-                watermarked_sketch_path = sketch.convert_to_sketch(original_path, add_watermark=True)
+    try:
+        # Check if session data exists
+        session_file = os.path.join(TEMP_FOLDER, f"{session_id}.json")
+        if not os.path.exists(session_file):
+            return jsonify({"error": "Invalid session ID"}), 400
+            
+        # Load session data
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+        
+        # Get the sketch path
+        sketch_path = session_data.get("sketch_path")
+        if not sketch_path or not os.path.exists(sketch_path):
+            return jsonify({"error": "Sketch file not found"}), 404
+            
+        # Get the original style used
+        style = session_data.get("style", "pencil")
+        
+        # Get the original image path
+        original_path = session_data.get("original_path")
+        if not original_path or not os.path.exists(original_path):
+            return jsonify({"error": "Original image not found"}), 404
+        
+        # Generate a new sketch with proper Draw AI watermark to ensure consistency
+        try:
+            print(f"Re-generating watermarked sketch for download with style: {style}")
+            
+            # Use the original style for the download
+            if style == 'pencil':
+                download_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=True)
+            elif style == 'realistic':
+                download_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=True)
+            elif style == 'portrait':
+                download_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=True)
+            elif style == 'ultra-clear':
+                download_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=True)
+            else:
+                download_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=True)
                 
-                print(f"Watermarked sketch generated at: {watermarked_sketch_path}")
-                
-                return send_file(
-                    watermarked_sketch_path,
-                    as_attachment=True,
-                    download_name="draw_ai_free_sketch.jpg",
-                    mimetype='image/jpeg'
-                )
-            except Exception as e:
-                print(f"Error generating watermarked sketch for download: {str(e)}")
-                # Fall back to stored sketch if watermarking fails
-        else:
-            # Fall back to the stored sketch if original is not available
+            print(f"Generated download sketch at: {download_path}")
+            
+            # Set a better filename for the download
+            download_filename = f"Draw_AI_Sketch_{style}_{session_id[:8]}.jpg"
+            
+            # Return the file for download
             return send_file(
-                session_data["sketch_path"],
+                download_path,
                 as_attachment=True,
-                download_name="draw_ai_free_sketch.jpg",
+                download_name=download_filename,
                 mimetype='image/jpeg'
             )
-    else:
-        return jsonify({"error": "Sketch file not found"}), 404
+            
+        except Exception as e:
+            print(f"Error generating download sketch: {str(e)}")
+            return jsonify({"error": str(e)}), 500
+            
+    except Exception as e:
+        print(f"Error during free sketch download: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/download/<session_id>', methods=['GET'])
 def download_sketch(session_id):
