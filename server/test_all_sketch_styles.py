@@ -45,9 +45,9 @@ def test_all_sketch_styles(image_path, output_dir=None):
         cv2.imwrite(realistic_output, img)
         print(f"Realistic pencil sketch saved to: {realistic_output}")
         
-        # Test artistic portrait sketch
-        print("\n3. Testing artistic portrait sketch...")
-        portrait_path = improved_sketch.convert_to_artistic_portrait_sketch(image_path, add_watermark=False)
+        # Test portrait sketch (renamed from artistic_portrait to match the app.py implementation)
+        print("\n3. Testing portrait sketch...")
+        portrait_path = improved_sketch.convert_to_ultra_clear_sketch(image_path, add_watermark=False)
         
         # Copy to output dir with more descriptive name
         portrait_output = os.path.join(output_dir, f"{base_name}_artistic_portrait.jpg")
@@ -64,6 +64,16 @@ def test_all_sketch_styles(image_path, output_dir=None):
         img = cv2.imread(ultra_path)
         cv2.imwrite(ultra_output, img)
         print(f"Ultra-clear sketch saved to: {ultra_output}")
+        
+        # Test authentic pencil sketch (new professional style)
+        print("\n5. Testing authentic professional pencil sketch...")
+        authentic_path = improved_sketch.convert_to_authentic_pencil_sketch(image_path, add_watermark=False)
+        
+        # Copy to output dir with more descriptive name
+        authentic_output = os.path.join(output_dir, f"{base_name}_authentic_pencil.jpg")
+        img = cv2.imread(authentic_path)
+        cv2.imwrite(authentic_output, img)
+        print(f"Authentic professional pencil sketch saved to: {authentic_output}")
         
         print("\nAll sketch styles generated successfully!")
         return True

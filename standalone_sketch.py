@@ -15,7 +15,9 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
         mode: "regular" for standard sketch, 
               "realistic" for realistic sketch with shading, 
               "artistic" for professional artist-quality portrait sketch,
-              "ultra-clear" for ultra-defined lines with maximum clarity (default: artistic)
+              "ultra-clear" for ultra-defined lines with maximum clarity,
+              "authentic-pencil" for true professional hand-drawn pencil portrait with deep blacks
+              (default: artistic)
         
     Returns:
         Path to the generated sketch image
@@ -124,7 +126,7 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
             result = cv2.convertScaleAbs(result, alpha=1.2, beta=5)
             
         elif mode == "ultra-clear":
-            # Authentic pencil sketch that mimics real hand-drawn artwork
+            # Ultra-clear sketch for maximum detail and clarity
             
             # Convert to grayscale with natural pencil-friendly weights
             if len(img.shape) == 3:
@@ -195,6 +197,108 @@ def create_pencil_sketch(image_path, output_path=None, mode="artistic"):
                                      [-0.4, -0.4, -0.4]])
             result = cv2.filter2D(sketch_contrast, -1, sharpen_kernel)
             
+        elif mode == "authentic-pencil":
+            # Authentic professional pencil sketch that truly resembles hand-drawn artwork
+            
+            # High-resolution processing for fine detail
+            height, width = img.shape[:2]
+            if max(height, width) > 2000:
+                scale_factor = 2000 / max(height, width)
+                img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+            elif max(height, width) < 1000:
+                # If image is too small, upscale for better detailing
+                scale_factor = 1000 / max(height, width)
+                img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+                
+            height, width = img.shape[:2]
+            
+            # Superior grayscale conversion using custom color mixing
+            if len(img.shape) == 3:
+                # Split channels
+                b, g, r = cv2.split(img)
+                # Custom mixing weights optimized for skin tones and deep blacks
+                gray = cv2.addWeighted(r, 0.35, g, 0.4, 0)
+                gray = cv2.addWeighted(gray, 0.8, b, 0.2, 0)
+            else:
+                gray = img.copy()
+            
+            # Advanced contrast enhancement for deep blacks
+            clahe1 = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            gray_enhanced = clahe1.apply(gray)
+            
+            # Apply targeted contrast enhancement 
+            lookUpTable = np.empty((1, 256), np.uint8)
+            for i in range(256):
+                # Deep S-curve for dramatic black pencil effect
+                if i < 100:
+                    # Make shadows darker
+                    lookUpTable[0, i] = np.clip(i * 0.8, 0, 255)
+                else:
+                    # Keep highlights
+                    lookUpTable[0, i] = np.clip(((i - 100) * 0.9) + 80, 0, 255)
+            
+            gray_contrast = cv2.LUT(gray_enhanced, lookUpTable)
+            
+            # Multi-layer smoothing with detail preservation
+            smooth = cv2.bilateralFilter(gray_contrast, 7, 35, 35)
+            
+            # Advanced shadow creation for realistic pencil depth
+            # Invert the image for shadow creation
+            inverted = 255 - smooth
+            
+            # Multiple blur kernels for realistic pencil shadow gradient
+            # Large kernel for deep shadows (like dark hair areas)
+            k_deep = int(min(width, height) * 0.04) | 1  # Ensure odd
+            blur_deep = cv2.GaussianBlur(inverted, (k_deep, k_deep), 0)
+            
+            # Medium kernel for transition areas
+            k_med = int(min(width, height) * 0.02) | 1  # Ensure odd
+            blur_med = cv2.GaussianBlur(inverted, (k_med, k_med), 0)
+            
+            # Small kernel for fine details and lines
+            k_fine = int(min(width, height) * 0.01) | 1  # Ensure odd
+            k_fine = max(3, k_fine)  # At least 3
+            blur_fine = cv2.GaussianBlur(inverted, (k_fine, k_fine), 0)
+            
+            # Multi-layered pencil effect with weighted blending
+            shadows = cv2.addWeighted(blur_deep, 0.4, blur_med, 0.4, 0)
+            shadows = cv2.addWeighted(shadows, 0.8, blur_fine, 0.2, 0)
+            
+            # Professional dodge effect (creates the pencil-to-paper interaction)
+            sketch_base = cv2.divide(smooth, 255 - shadows, scale=256.0)
+            
+            # Edge refinement for detailed features
+            edges = cv2.Laplacian(smooth, cv2.CV_8U, ksize=3)
+            _, edges_thresh = cv2.threshold(edges, 15, 255, cv2.THRESH_BINARY_INV)
+            edges_soft = cv2.GaussianBlur(edges_thresh, (3, 3), 0.5)
+            
+            # Layer composition like an artist's technique
+            sketch_edge_enhanced = cv2.addWeighted(sketch_base, 0.75, edges_soft, 0.25, 0)
+            
+            # Create subtle paper texture with grain
+            h, w = sketch_edge_enhanced.shape
+            np.random.seed(42)  # For consistent results
+            fine_grain = np.random.randint(246, 255, (h, w), dtype=np.uint8)
+            
+            # Create medium scale texture
+            h_med, w_med = h//4, w//4
+            medium_grain = np.random.randint(240, 255, (h_med, w_med), dtype=np.uint8)
+            medium_grain = cv2.resize(medium_grain, (w, h), interpolation=cv2.INTER_LINEAR)
+            
+            # Blend textures
+            paper_texture = np.ones((h, w), dtype=np.uint8) * 252
+            paper_grain = cv2.addWeighted(fine_grain, 0.6, medium_grain, 0.4, 0)
+            paper_texture = cv2.addWeighted(paper_texture, 0.85, paper_grain, 0.15, 0)
+            
+            # Apply paper texture to sketch
+            result = cv2.multiply(sketch_edge_enhanced, paper_texture, scale=1/255.0)
+            
+            # Final professional touch - subtle sharpening
+            sharpen_kernel = np.array([[-0.2, -0.2, -0.2], 
+                                     [-0.2, 3.0, -0.2], 
+                                     [-0.2, -0.2, -0.2]])
+            result = cv2.filter2D(result, -1, sharpen_kernel)
+        
         else:
             print(f"Error: Invalid mode '{mode}'. Use 'regular', 'realistic', 'artistic', or 'ultra-clear'.")
             return None
@@ -214,8 +318,8 @@ def main():
     parser = argparse.ArgumentParser(description='Convert an image to a pencil sketch.')
     parser.add_argument('image_path', help='Path to the input image')
     parser.add_argument('-o', '--output', help='Path to save the output image')
-    parser.add_argument('-m', '--mode', choices=['regular', 'realistic', 'artistic', 'ultra-clear'], 
-                        default='artistic', help='Sketch mode: "regular" (basic), "realistic" (shaded), "artistic" (portrait), or "ultra-clear" (authentic hand-drawn) (default: artistic)')
+    parser.add_argument('-m', '--mode', choices=['regular', 'realistic', 'artistic', 'ultra-clear', 'authentic-pencil'], 
+                        default='artistic', help='Sketch mode: "regular" (basic), "realistic" (shaded), "artistic" (portrait), "ultra-clear" (enhanced detail), or "authentic-pencil" (professional hand-drawn) (default: artistic)')
     
     args = parser.parse_args()
     

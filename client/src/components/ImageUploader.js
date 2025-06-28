@@ -126,8 +126,8 @@ const ImageUploader = () => {
                         Artistic Portrait
                     </button>
                     <button
-                        className={`px-4 py-2 rounded-md ${sketchStyle === 'ultra-clear' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
-                        onClick={() => setSketchStyle('ultra-clear')}
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'authentic-pencil' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('authentic-pencil')}
                     >
                         Authentic Pencil
                     </button>

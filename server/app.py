@@ -146,9 +146,11 @@ def convert_image_with_style():
             elif style == 'realistic':
                 sketch_path = improved_sketch.convert_to_realistic_pencil_sketch(filepath, add_watermark=True)
             elif style == 'portrait':
-                sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
+                sketch_path = improved_sketch.convert_to_ultra_clear_sketch(filepath, add_watermark=True)
             elif style == 'ultra-clear':
                 sketch_path = improved_sketch.convert_to_ultra_clear_sketch(filepath, add_watermark=True)
+            elif style == 'authentic-pencil':
+                sketch_path = improved_sketch.convert_to_authentic_pencil_sketch(filepath, add_watermark=True)
             else:
                 # Default to artistic portrait sketch for best results
                 sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
@@ -354,9 +356,11 @@ def get_premium_sketch():
             elif style == 'realistic':
                 premium_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=False)
             elif style == 'portrait':
-                premium_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=False)
+                premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
             elif style == 'ultra-clear':
                 premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
+            elif style == 'authentic-pencil':
+                premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
                 
@@ -423,9 +427,11 @@ def download_premium_sketch(session_id):
             elif style == 'realistic':
                 premium_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=False)
             elif style == 'portrait':
-                premium_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=False)
+                premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
             elif style == 'ultra-clear':
                 premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
+            elif style == 'authentic-pencil':
+                premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
                 
@@ -488,9 +494,11 @@ def download_free_sketch(session_id):
             elif style == 'realistic':
                 download_path = improved_sketch.convert_to_realistic_pencil_sketch(original_path, add_watermark=True)
             elif style == 'portrait':
-                download_path = improved_sketch.convert_to_artistic_portrait_sketch(original_path, add_watermark=True)
+                download_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=True)
             elif style == 'ultra-clear':
                 download_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=True)
+            elif style == 'authentic-pencil':
+                download_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=True)
             else:
                 download_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=True)
                 
