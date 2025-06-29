@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 import uuid
 import json
 from dotenv import load_dotenv
+from enhanced_realistic_portrait_sketch import convert_to_realistic_portrait_sketch  # Import enhanced portrait sketch
 
 # Load environment variables
 load_dotenv()
@@ -152,8 +153,7 @@ def convert_image_with_style():
             elif style == 'authentic-pencil':
                 sketch_path = improved_sketch.convert_to_authentic_pencil_sketch(filepath, add_watermark=True)
             elif style == 'realistic-portrait':
-                # Import the realistic portrait sketch module
-                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                # Use the enhanced realistic portrait sketch module
                 sketch_path = convert_to_realistic_portrait_sketch(filepath, add_watermark=True)
             else:
                 # Default to artistic portrait sketch for best results
@@ -367,7 +367,7 @@ def get_premium_sketch():
                 premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
             elif style == 'realistic-portrait':
                 # Import the realistic portrait sketch module
-                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                # Using enhanced realistic portrait sketch imported at top
                 premium_path = convert_to_realistic_portrait_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
@@ -442,7 +442,7 @@ def download_premium_sketch(session_id):
                 premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
             elif style == 'realistic-portrait':
                 # Import the realistic portrait sketch module
-                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                # Using enhanced realistic portrait sketch imported at top
                 premium_path = convert_to_realistic_portrait_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
