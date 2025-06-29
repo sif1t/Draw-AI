@@ -95,9 +95,131 @@ def create_professional_feature_mask(height, width, face_mask):
     # Combine face feature masks
     feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
     return feature_mask
+
+def convert_to_realistic_portrait_sketch(image_path, add_watermark=True):
+    """
+    Convert an image to a hyper-realistic pencil sketch that looks exactly
+    like a real artist-drawn pencil portrait with proper facial feature emphasis,
+    skin texture, and hair detail.
+    
+    Args:
+        image_path: Path to the input image
+        add_watermark: Boolean to determine if watermark should be added
+    
+    Returns:
+        Path to the generated realistic portrait sketch
+    """
+    print(f"Converting image to realistic artist-quality portrait sketch. Add watermark: {add_watermark}")
+    
+    try:
+        # Check if file exists
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+            
+        # Read the image with error handling
+        img = cv2.imread(image_path)
+        
+        # Check if image was successfully loaded
+        if img is None:
+            raise ValueError(f"Failed to load image from {image_path}")
+        
+        # Step 1: Enhanced high-resolution processing for portrait detail
+        max_dimension = 2500  # Higher resolution for professional-quality detail
+        height, width = img.shape[:2]
+        if max(height, width) > max_dimension:
+            scale_factor = max_dimension / max(height, width)
+            img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+        elif max(height, width) < 1500:  # If image is too small, upscale for better detailing
+            scale_factor = 1500 / max(height, width)
+            img = cv2.resize(img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+        
+        # Get new dimensions after resize
+        height, width = img.shape[:2]
+        
+        # Step 2: Superior grayscale conversion for realistic skin tones
+        if len(img.shape) == 3:
+            # Split channels for portrait-specific mixing
+            b, g, r = cv2.split(img)
+            
+            # Professional artist-grade weights for realistic portrait sketches
+            # Enhanced skin tone reproduction with greater emphasis on red channel for warmth
+            gray = cv2.addWeighted(r, 0.5, g, 0.35, 0)  # More emphasis on red for better skin tones
+            gray = cv2.addWeighted(gray, 0.92, b, 0.08, 0)  # Less blue influence for more natural look
+            
+            # Apply advanced CLAHE for professional-quality contrast in facial features
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            gray = clahe.apply(gray)
+            
+            # Apply refined contrast enhancement for professional look with rich blacks
+            alpha = 1.1  # Increased contrast boost for clearer lines
+            beta = -10   # Darker for deeper, richer pencil-like appearance
+            gray = cv2.convertScaleAbs(gray, alpha=alpha, beta=beta)
+        else:
+            gray = img.copy()
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            gray = clahe.apply(gray)
+        
+        # Step 3: Apply professional quality filtering for ideal sketch base
+        # Apply multi-stage bilateral filtering for natural skin texture preservation
+        smooth1 = cv2.bilateralFilter(gray, 11, 30, 30)  # Stronger smoothing for skin areas
+        smooth2 = cv2.bilateralFilter(smooth1, 7, 20, 20)  # Intermediate smoothing
+        
+        # Apply sharpening for better defined edges
+        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+        sharp = cv2.filter2D(smooth2, -1, kernel)
+        
+        # Step 4: Apply adaptive edge detection for professional-quality line work
+        edge1 = cv2.adaptiveThreshold(sharp, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
+                                    cv2.THRESH_BINARY, 9, 9)
+        edge2 = cv2.adaptiveThreshold(sharp, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                    cv2.THRESH_BINARY, 9, 9)
+        edge = cv2.addWeighted(edge1, 0.5, edge2, 0.5, 0)
+        
+        # Step 5: Use feature detection to emphasize important portrait areas
+        # Create a mask to emphasize important facial features
+        feature_mask = create_professional_feature_mask(height, width, None)
+        
+        # Convert mask to uint8 (0-255) range
+        feature_mask_norm = (feature_mask * 255).astype(np.uint8)
+        
+        # Apply edge enhancement in facial feature areas
+        # Use feature mask to refine edge details
+        edges_enhanced = cv2.bitwise_and(edge, feature_mask_norm)
+        edges_standard = cv2.bitwise_and(edge, 255 - feature_mask_norm)
+        edge = cv2.addWeighted(edges_enhanced, 1.5, edges_standard, 0.5, 0)
+        
+        # Step 6: Create professional shadow effect by inverting and blurring
+        inverted = 255 - edge
+        blur_amount = int(width * 0.03)  # Proportional blur for better scaling
+        if blur_amount % 2 == 0:  # Ensure odd kernel size
+            blur_amount += 1
+        shadow = cv2.GaussianBlur(inverted, (blur_amount, blur_amount), 0)
+        
+        # Step 7: Blend shadow and edge layers with dodge technique for realistic pencil effect
+        def dodge(front, back):
+            # Dynamic blend for more natural pencil look
+            result = 255 - np.minimum(255, (255 - back) * 255 / np.maximum(front, 1))
+            return result.astype(np.uint8)
+        
+        # Apply multi-layer dodge for realistic depth
+        sketch1 = dodge(shadow, edge)
+        
+        # Step 8: Apply tonal enhancement to improve realistic appearance
+        # Apply curve adjustments for realistic pencil tone mapping
+        lut = np.zeros((1, 256), dtype=np.uint8)
+        # Generate custom tone curve for pencil sketch effect
+        for i in range(256):
+            # Tone curve that mimics graphite pencil response
+            lut[0, i] = min(255, int(1.5 * i ** 0.9)) if i < 100 else min(255, int(0.8 * i + 70))
+        
+        # Apply the custom tone curve
+        sketch2 = cv2.LUT(sketch1, lut)
+        
+        # Step 9: Add natural pencil texture and variations
+        # Create realistic pencil texture
         np.random.seed(42)  # For reproducibility
-        texture = np.random.normal(0, 3, sketch.shape).astype(np.uint8)  # Changed from int8 to uint8
-        sketch = cv2.add(sketch, texture)
+        texture = np.random.normal(0, 3, sketch2.shape).astype(np.uint8)  # Changed from int8 to uint8
+        sketch = cv2.add(sketch2, texture)
         
         # Apply final contrast enhancement for professional finish
         alpha = 1.2  # Contrast control
@@ -148,1474 +270,32 @@ def create_professional_feature_mask(height, width, face_mask):
                 y = img_height - text_height - margin
                 
                 # Add a semi-transparent background for the watermark
-                draw.rectangle(
-                    [(x - 10, y - 10), (x + text_width + 10, y + text_height + 10)], 
-                    fill=(0, 0, 0, 128)
-                )
+                draw.rectangle([x - 10, y - 10, x + text_width + 10, y + text_height + 10], 
+                               fill=(255, 255, 255, 128))
                 
-                # Add the watermark text
-                draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))
+                # Add text
+                draw.text((x, y), watermark_text, fill=(80, 80, 80), font=font)
                 
                 # Convert back to OpenCV format
                 result = np.array(pil_img)
             except Exception as e:
-                print(f"Error adding watermark: {str(e)}")
-                # Continue without watermark if method fails
-                result = np.array(pil_img)
+                print(f"Error adding watermark: {e}")
         
-        # Create a unique filename for the output
-        output_filename = f"portrait_sketch_{uuid.uuid4().hex}.jpg"
+        # Save the result with unique filename
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(image_path)), "portrait_results")
+        os.makedirs(output_dir, exist_ok=True)
         
-        # Get the base directory of the script
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        temp_dir = os.path.join(base_dir, "temp")
-        output_path = os.path.join(temp_dir, output_filename)
+        # Generate unique filename
+        unique_id = uuid.uuid4().hex[:8]
+        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        output_path = os.path.join(output_dir, f"{base_name}_realistic_portrait_{unique_id}.jpg")
         
-        # Ensure the temp directory exists
-        os.makedirs(temp_dir, exist_ok=True)
+        # Save with high quality
+        cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 95])
         
-        print(f"Saving realistic portrait sketch to: {output_path}")
-        # Save the sketch with high quality
-        cv2.imwrite(output_path, result, [cv2.IMWRITE_JPEG_QUALITY, 99])
-        
+        print(f"Realistic portrait sketch saved to: {output_path}")
         return output_path
         
     except Exception as e:
-        print(f"Error in realistic portrait sketch: {str(e)}")
+        print(f"Error in converting to realistic portrait sketch: {e}")
         raise
-            
-        # Step 3: Apply professional quality filtering for ideal sketch base
-        # Use bilateral filter to preserve edges while smoothing
-        smooth1 = cv2.bilateralFilter(gray, 9, 25, 25)
-        smooth2 = cv2.bilateralFilter(smooth1, 7, 15, 15)
-        
-        # Apply sharpening for more defined edges
-        kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-        sharpened = cv2.filter2D(smooth2, -1, kernel)
-        
-        # Combine smooth and sharp for more natural look
-        base = cv2.addWeighted(smooth2, 0.6, sharpened, 0.4, 0)
-        
-        # Create inverted version for sketch effect
-        inverted = 255 - base
-        
-        # Apply Gaussian blur for pencil-like effect
-        blurred = cv2.GaussianBlur(inverted, (0, 0), sigmaX=3, sigmaY=3)
-        
-        # Combine using color dodge blend mode
-        sketch = cv2.divide(base, 255 - blurred, scale=256)
-        
-        # Enhance contrast for clearer professional look
-        alpha = 1.2  # Contrast control
-        beta = -10    # Brightness control
-        sketch = cv2.convertScaleAbs(sketch, alpha=alpha, beta=beta)
-        
-        # Apply a subtle texture
-        noise = np.random.normal(0, 2, sketch.shape).astype(np.uint8)
-        sketch = cv2.add(sketch, noise)
-        
-        # Apply final detailing
-        edges = cv2.Canny(base, 50, 150)
-        edges = cv2.dilate(edges, None)
-        edges = cv2.GaussianBlur(edges, (0, 0), sigmaX=0.5, sigmaY=0.5)
-        
-        # Darken the edges for clearer lines
-        sketch = cv2.addWeighted(sketch, 1.0, edges, -0.1, 0)
-        
-        # Final contrast adjustment for professional look
-        clahe_final = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        sketch = clahe_final.apply(sketch)
-        
-        # Final sharpening for clear, professional edges
-        kernel_sharp = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-        sketch = cv2.filter2D(sketch, -1, kernel_sharp)
-        
-        # Set result
-        result = sketch
-            
-        # Step 3: Enhanced portrait-specific detail processing
-        # Apply multi-stage bilateral filtering for studio-quality skin texture preservation
-        # First pass: Stronger smoothing but preserve edges
-        smooth_pass1 = cv2.bilateralFilter(gray, 13, 30, 30)  # Stronger smoothing for skin areas
-        
-        # Second pass: Gentler smoothing to maintain subtle details
-        smooth_pass2 = cv2.bilateralFilter(smooth_pass1, 7, 20, 20)  # Intermediate smoothing
-        
-        # Third pass: Fine detail preservation
-        smooth = cv2.bilateralFilter(smooth_pass2, 5, 10, 10)  # Final pass with gentle smoothing
-        
-        # Create an edge-preserved but smoothed version for better face texture
-        detail_preserved = cv2.detailEnhance(cv2.cvtColor(cv2.cvtColor(smooth, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2RGB), 
-                                            sigma_s=10, sigma_r=0.15)
-        detail_preserved_gray = cv2.cvtColor(cv2.cvtColor(detail_preserved, cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
-        
-        # Apply precision sharpening to enhance key portrait features (studio quality)
-        kernel_sharpening = np.array([[-1,-1,-1], 
-                                     [-1, 9.5,-1],  # Increased central weight for more defined lines
-                                     [-1,-1,-1]])
-        sharp = cv2.filter2D(smooth, -1, kernel_sharpening)
-        
-        # Apply a second, more subtle sharpening pass for fine details
-        kernel_fine_detail = np.array([[-0.5,-0.5,-0.5], 
-                                      [-0.5, 7,-0.5],
-                                      [-0.5,-0.5,-0.5]])
-        sharp_fine = cv2.filter2D(detail_preserved_gray, -1, kernel_fine_detail)
-        
-        # Blend multiple versions for the most natural, professional look
-        # More weight on sharp details for clearer lines and professional appearance
-        smooth = cv2.addWeighted(smooth, 0.3, sharp, 0.5, 0)
-        smooth = cv2.addWeighted(smooth, 0.8, sharp_fine, 0.2, 0)
-        smooth = cv2.addWeighted(smooth, 0.85, detail_preserved_gray, 0.15, 0)
-        
-        # Step 4: Advanced facial feature detection with improved mask generation
-        # Detect face area - for simplified implementation, we'll assume central portion contains face
-        face_region_y_start = int(height * 0.15)
-        face_region_y_end = int(height * 0.85)
-        face_region_x_start = int(width * 0.15)
-        face_region_x_end = int(width * 0.85)
-        
-        # Create enhanced face region mask with more natural falloff
-        face_mask = np.zeros((height, width), dtype=np.float32)
-        cv2.rectangle(face_mask, 
-                    (face_region_x_start, face_region_y_start), 
-                    (face_region_x_end, face_region_y_end), 
-                    1.0, 
-                    -1)
-                    
-        # Create a more natural oval/elliptical mask instead of rectangular
-        center_x, center_y = width // 2, height // 2
-        # Create elliptical gradient for more natural face region
-        for y in range(height):
-            for x in range(width):
-                # Calculate normalized elliptical distance from center
-                dist_x = abs(x - center_x) / (width * 0.4)
-                dist_y = abs(y - center_y) / (height * 0.5)
-                dist = np.sqrt(dist_x**2 + dist_y**2)
-                
-                # Apply radial falloff but emphasize face region
-                if dist < 0.5:  # Central face area
-                    face_mask[y, x] = max(0.65, 1.0 - dist*0.5)  # Increased minimum value
-                elif dist < 1.0:  # Face periphery
-                    face_mask[y, x] = max(0.35, 1.0 - dist*0.7)  # Increased minimum value
-                else:  # Background
-                    face_mask[y, x] = max(0, 1.0 - dist*0.9)
-                    
-        # Apply Gaussian blur to smooth the mask transitions
-        face_mask = cv2.GaussianBlur(face_mask, (0, 0), sigmaX=width*0.03, sigmaY=height*0.03)
-                    
-        # Convert to uint8 for visualization and blending
-        face_mask_vis = (face_mask * 255).astype(np.uint8)
-        
-        # Create professional feature mask for facial features
-        feature_mask = create_professional_feature_mask(height, width, face_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 5: Professional-grade portrait-specific edge detection
-        # Detect edges with varying intensities for studio-quality pencil-like rendering
-        
-        # Fine edges for facial features (eyes, nose, mouth details)
-        # Use multiple Laplacian kernel sizes for multi-scale detection
-        fine_edges1 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=1)
-        fine_edges3 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=3)
-        fine_edges5 = cv2.Laplacian(smooth, cv2.CV_32F, ksize=5)  # Add larger kernel for mid-level details
-        
-        # Combine multiple scales with weighted emphasis on smaller kernels for finer details
-        fine_edges = cv2.addWeighted(fine_edges1, 0.5, fine_edges3, 0.35, 0)
-        fine_edges = cv2.addWeighted(fine_edges, 0.85, fine_edges5, 0.15, 0)
-        fine_edges = cv2.convertScaleAbs(fine_edges)
-        
-        # Medium edges for facial contours with improved detection
-        # Use Sobel with different kernel sizes and orientations
-        sobel_x3 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        sobel_y3 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        sobel_x5 = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=5) 
-        sobel_y5 = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=5)
-        
-        # Combine multiple scales of Sobel with more emphasis on mid-level details
-        sobel_x = cv2.addWeighted(sobel_x3, 0.65, sobel_x5, 0.35, 0)
-        sobel_y = cv2.addWeighted(sobel_y3, 0.65, sobel_y5, 0.35, 0)
-        
-        # Calculate magnitude with improved weighting
-        medium_edges = cv2.magnitude(sobel_x, sobel_y)
-        medium_edges = cv2.normalize(medium_edges, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        
-        # Soft edges for hair and subtle features with anisotropic blurring
-        # First pass with horizontal emphasis (for hair-like strokes)
-        kernel_h = np.zeros((7, 7))  # Larger kernel for more pronounced stroke texture
-        kernel_h[3, :] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_h = cv2.filter2D(medium_edges, -1, kernel_h)
-        
-        # Second pass with vertical emphasis
-        kernel_v = np.zeros((7, 7))
-        kernel_v[:, 3] = np.array([0.05, 0.1, 0.15, 0.4, 0.15, 0.1, 0.05])
-        soft_edges_v = cv2.filter2D(medium_edges, -1, kernel_v)
-        
-        # Diagonal kernels for more natural pencil stroke appearance
-        kernel_d1 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d1[i, i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d1 = cv2.filter2D(medium_edges, -1, kernel_d1)
-        
-        kernel_d2 = np.zeros((7, 7))
-        for i in range(7):
-            kernel_d2[i, 6-i] = 0.1 if i in [0, 6] else (0.2 if i in [1, 5] else 0.3)
-        soft_edges_d2 = cv2.filter2D(medium_edges, -1, kernel_d2)
-        
-        # Combine directional soft edges based on local gradient
-        # This creates more natural pencil-like strokes following the features
-        grad_x = cv2.Sobel(smooth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(smooth, cv2.CV_32F, 0, 1, ksize=3)
-        
-        # Calculate gradient direction and magnitude
-        grad_mag = cv2.magnitude(grad_x, grad_y)
-        grad_norm = cv2.normalize(grad_mag, None, 0, 1, cv2.NORM_MINMAX)
-        
-        # Create directional weights
-        dir_weight_h = np.zeros_like(grad_x)
-        dir_weight_v = np.zeros_like(grad_x)
-        dir_weight_d1 = np.zeros_like(grad_x)
-        dir_weight_d2 = np.zeros_like(grad_x)
-        
-        for y in range(height):
-            for x in range(width):
-                if grad_mag[y, x] > 0:
-                    # Normalize gradient components
-                    gx = grad_x[y, x] / grad_mag[y, x]
-                    gy = grad_y[y, x] / grad_mag[y, x]
-                    
-                    # Weight horizontal vs vertical based on gradient direction
-                    # More complex weighting scheme for more natural stroke direction
-                    abs_gx = abs(gx)
-                    abs_gy = abs(gy)
-                    
-                    # Calculate primary direction weights
-                    if abs_gx > abs_gy:
-                        dir_weight_h[y, x] = abs_gx
-                        dir_weight_v[y, x] = abs_gy * 0.5
-                    else:
-                        dir_weight_h[y, x] = abs_gx * 0.5
-                        dir_weight_v[y, x] = abs_gy
-                    
-                    # Calculate diagonal weights
-                    if gx * gy > 0:  # Same sign means \\ diagonal
-                        dir_weight_d1[y, x] = abs(gx * gy) * 1.2  # Boost diagonal strokes
-                    else:  # Different sign means // diagonal
-
-                        dir_weight_d2[y, x] = abs(gx * gy) * 1.2
-        
-        # Combine soft edges with directional weighting including diagonal components
-        soft_edges = np.zeros_like(soft_edges_h, dtype=np.float32)
-        for y in range(height):
-            for x in range(width):
-                soft_edges[y, x] = (soft_edges_h[y, x] * dir_weight_h[y, x] + 
-                                   soft_edges_v[y, x] * dir_weight_v[y, x] +
-                                   soft_edges_d1[y, x] * dir_weight_d1[y, x] +
-                                   soft_edges_d2[y, x] * dir_weight_d2[y, x])
-                total_weight = (dir_weight_h[y, x] + dir_weight_v[y, x] + 
-                              dir_weight_d1[y, x] + dir_weight_d2[y, x])
-                if total_weight > 0:
-                    soft_edges[y, x] /= total_weight
-        
-        # Apply final Gaussian smoothing for natural look
-        soft_edges = cv2.GaussianBlur(soft_edges, (0, 0), 1.0)
-        
-        # Combine edges based on face mask with enhanced blending for more artistic look
-        edges = np.zeros_like(fine_edges, dtype=np.float32)
-        
-        # Create a separate edge map for eyes, lips and important facial features
-        # Detect likely eye regions based on vertical position
-        eye_region_y_start = int(height * 0.25)
-        eye_region_y_end = int(height * 0.45)
-        left_eye_x_start = int(width * 0.25)
-        left_eye_x_end = int(width * 0.45)
-        right_eye_x_start = int(width * 0.55)
-        right_eye_x_end = int(width * 0.75)
-        
-        eye_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create oval/elliptical eye regions for more natural emphasis
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(left_eye_x_start, left_eye_x_end):
-                # Calculate normalized distance from left eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Right eye with similar calculation
-        for y in range(eye_region_y_start, eye_region_y_end):
-            for x in range(right_eye_x_start, right_eye_x_end):
-                # Calculate normalized distance from right eye center
-                eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-                eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-                
-                # Elliptical distance calculation
-                normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-                normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2)
-                
-                # Apply radial falloff with strong center emphasis
-                if dist < 1.0:
-                    eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-        
-        # Apply professional-grade blur for natural transitions
-        eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                        sigmaX=width*0.01, sigmaY=height*0.01)  # Tighter blur for precision
-                       
-        # Create more precise mouth region detection
-        mouth_region_y_start = int(height * 0.55)
-        mouth_region_y_end = int(height * 0.7)
-        mouth_x_start = int(width * 0.3)
-        mouth_x_end = int(width * 0.7)
-        
-        mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-        
-        # Create elliptical mouth region for natural emphasis
-        mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-        mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-        mouth_width = mouth_x_end - mouth_x_start
-        mouth_height = mouth_region_y_end - mouth_region_y_start
-        
-        for y in range(mouth_region_y_start, mouth_region_y_end):
-            for x in range(mouth_x_start, mouth_x_end):
-                # Elliptical distance calculation
-                normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-                normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-                dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-                
-                # Apply radial falloff with emphasis on the center
-                if dist < 1.0:
-                    mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-        
-        # Apply Gaussian blur for natural transitions
-        mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                         sigmaX=width*0.015, sigmaY=height*0.015)
-        
-        # Combine face feature masks with professional-grade blending
-        feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-        
-        # Step 6: Create professional-quality feature mask emphasizing eyes, mouth, and nose
-        # Specialized function to create a detailed feature mask as an artist would
-        feature_mask = create_professional_feature_mask(height, width, face_mask)
-        
-        # Finalize the portrait sketch by combining all elements
-        # Blend the original image with the sketch and edges for a complete portrait effect
-        portrait_sketch = cv2.addWeighted(smooth, 0.7, edges, 0.3, 0)
-        
-        # Apply the feature mask to emphasize facial features in the final sketch
-        final_sketch = cv2.bitwise_and(portrait_sketch, portrait_sketch, mask=feature_mask.astype(np.uint8))
-        
-        # Step 7: Add professional watermark if required
-        if add_watermark:
-            # Simple text watermark - in practice, use a more sophisticated method
-            watermark_text = "Artist Name or Logo"
-            font_path = "arial.ttf"  # Update with a valid font path
-            font_size = int(height / 30)  # Scaled font size
-            font = ImageFont.truetype(font_path, font_size)
-            
-            # Convert to PIL image for watermarking
-            final_sketch_pil = Image.fromarray(final_sketch)
-            draw = ImageDraw.Draw(final_sketch_pil)
-            
-            # Calculate text size and position
-            text_width, text_height = draw.textsize(watermark_text, font=font)
-            text_x = width - text_width - int(width * 0.02)
-            text_y = height - text_height - int(height * 0.02)
-            
-            # Draw the watermark - in practice, use a more complex watermarking approach
-            draw.text((text_x, text_y), watermark_text, font=font, fill=(255, 255, 255, 128))
-            
-            # Convert back to OpenCV image
-            final_sketch = np.array(final_sketch_pil)
-        
-        # Step 8: Save the final portrait sketch
-        output_path = f"portrait_sketch_{uuid.uuid4().hex}.png"
-        cv2.imwrite(output_path, final_sketch)
-        
-        print(f"Portrait sketch saved to: {output_path}")
-        return output_path
-    
-    except Exception as e:
-        print(f"Error in processing image: {e}")
-        return None
-
-def create_professional_feature_mask(height, width, face_mask):
-    """
-    Creates a professional-quality feature mask for portrait sketches that emphasizes
-    eyes, mouth, and other key facial features as a real artist would.
-    
-    Args:
-        height: Image height
-        width: Image width
-        face_mask: Existing face mask
-        
-    Returns:
-        Feature mask with properly emphasized facial areas
-    """
-    # Create eye regions with professional emphasis
-    eye_region_y_start = int(height * 0.25)
-    eye_region_y_end = int(height * 0.45)
-    left_eye_x_start = int(width * 0.25)
-    left_eye_x_end = int(width * 0.45)
-    right_eye_x_start = int(width * 0.55)
-    right_eye_x_end = int(width * 0.75)
-    
-    eye_region_mask = np.zeros((height, width), dtype=np.float32)
-    
-    # Create oval/elliptical eye regions for more natural emphasis
-    for y in range(eye_region_y_start, eye_region_y_end):
-        for x in range(left_eye_x_start, left_eye_x_end):
-            # Calculate normalized distance from left eye center
-            eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-            eye_center_x = (left_eye_x_start + left_eye_x_end) // 2
-            
-            # Elliptical distance calculation
-            normalized_x = (x - eye_center_x) / ((left_eye_x_end - left_eye_x_start) / 2)
-            normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-            dist = np.sqrt(normalized_x**2 + normalized_y**2)
-            
-            # Apply radial falloff with strong center emphasis
-            if dist < 1.0:
-                eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-    
-    # Right eye with similar calculation
-    for y in range(eye_region_y_start, eye_region_y_end):
-        for x in range(right_eye_x_start, right_eye_x_end):
-            # Calculate normalized distance from right eye center
-            eye_center_y = (eye_region_y_start + eye_region_y_end) // 2
-            eye_center_x = (right_eye_x_start + right_eye_x_end) // 2
-            
-            # Elliptical distance calculation
-            normalized_x = (x - eye_center_x) / ((right_eye_x_end - right_eye_x_start) / 2)
-            normalized_y = (y - eye_center_y) / ((eye_region_y_end - eye_region_y_start) / 2)
-            dist = np.sqrt(normalized_x**2 + normalized_y**2)
-            
-            # Apply radial falloff with strong center emphasis
-            if dist < 1.0:
-                eye_region_mask[y, x] = max(eye_region_mask[y, x], 0.9 * (1.0 - dist))
-    
-    # Apply professional-grade blur for natural transitions
-    eye_region_mask = cv2.GaussianBlur(eye_region_mask, (0, 0), 
-                                    sigmaX=width*0.01, sigmaY=height*0.01)
-    
-    # Create more precise mouth region detection
-    mouth_region_y_start = int(height * 0.55)
-    mouth_region_y_end = int(height * 0.7)
-    mouth_x_start = int(width * 0.3)
-    mouth_x_end = int(width * 0.7)
-    
-    mouth_region_mask = np.zeros((height, width), dtype=np.float32)
-    
-    # Create elliptical mouth region for natural emphasis
-    mouth_center_y = (mouth_region_y_start + mouth_region_y_end) // 2
-    mouth_center_x = (mouth_x_start + mouth_x_end) // 2
-    mouth_width = mouth_x_end - mouth_x_start
-    mouth_height = mouth_region_y_end - mouth_region_y_start
-    
-    for y in range(mouth_region_y_start, mouth_region_y_end):
-        for x in range(mouth_x_start, mouth_x_end):
-            # Elliptical distance calculation
-            normalized_x = (x - mouth_center_x) / (mouth_width / 2)
-            normalized_y = (y - mouth_center_y) / (mouth_height / 2)
-            dist = np.sqrt(normalized_x**2 + normalized_y**2 * 1.2)  # Slightly wider oval shape
-            
-            # Apply radial falloff with emphasis on the center
-            if dist < 1.0:
-                mouth_region_mask[y, x] = 0.85 * (1.0 - dist)
-    
-    # Apply Gaussian blur for natural transitions
-    mouth_region_mask = cv2.GaussianBlur(mouth_region_mask, (0, 0), 
-                                     sigmaX=width*0.015, sigmaY=height*0.015)
-    
-    # Add nose region emphasis - crucial for professional portraits
-    nose_region_y_start = int(height * 0.45)
-    nose_region_y_end = int(height * 0.55)
-    nose_x_start = int(width * 0.4)
-    nose_x_end = int(width * 0.6)
-    
-    nose_region_mask = np.zeros((height, width), dtype=np.float32)
-    
-    # Create subtle nose emphasis
-    for y in range(nose_region_y_start, nose_region_y_end):
-        for x in range(nose_x_start, nose_x_end):
-            # Calculate normalized distance from nose center
-            nose_center_y = (nose_region_y_start + nose_region_y_end) // 2
-            nose_center_x = (nose_x_start + nose_x_end) // 2
-            
-            # Elliptical distance calculation
-            normalized_x = (x - nose_center_x) / ((nose_x_end - nose_x_start) / 2)
-            normalized_y = (y - nose_center_y) / ((nose_region_y_end - nose_region_y_start) / 2)
-            dist = np.sqrt(normalized_x**2 + normalized_y**2)
-            
-            # Apply radial falloff with moderate emphasis
-            if dist < 1.0:
-                nose_region_mask[y, x] = 0.7 * (1.0 - dist)
-    
-    # Apply Gaussian blur for natural transitions
-    nose_region_mask = cv2.GaussianBlur(nose_region_mask, (0, 0), 
-                                    sigmaX=width*0.01, sigmaY=height*0.01)
-    
-    # Combine all feature masks
-    feature_mask = np.maximum(eye_region_mask, mouth_region_mask)
-    feature_mask = np.maximum(feature_mask, nose_region_mask)
-    
-    # Apply one final smooth blur for natural transitions
-    feature_mask = cv2.GaussianBlur(feature_mask, (0, 0), sigmaX=width*0.01, sigmaY=height*0.01)
-    
-    return feature_mask
