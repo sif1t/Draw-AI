@@ -131,9 +131,18 @@ const ImageUploader = () => {
                     >
                         Authentic Pencil
                     </button>
+                    <button
+                        className={`px-4 py-2 rounded-md ${sketchStyle === 'realistic-portrait' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'}`}
+                        onClick={() => setSketchStyle('realistic-portrait')}
+                    >
+                        Realistic Portrait
+                    </button>
                 </div>
                 <div className="mt-2 text-center text-xs text-gray-500">
-                    Authentic Pencil creates truly realistic hand-drawn sketch effects
+                    {sketchStyle === 'authentic-pencil' &&
+                        "Authentic Pencil creates truly realistic hand-drawn sketch effects"}
+                    {sketchStyle === 'realistic-portrait' &&
+                        "Realistic Portrait is optimized for human faces with detailed features and smooth skin tones"}
                 </div>
             </div>
 

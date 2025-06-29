@@ -151,6 +151,10 @@ def convert_image_with_style():
                 sketch_path = improved_sketch.convert_to_ultra_clear_sketch(filepath, add_watermark=True)
             elif style == 'authentic-pencil':
                 sketch_path = improved_sketch.convert_to_authentic_pencil_sketch(filepath, add_watermark=True)
+            elif style == 'realistic-portrait':
+                # Import the realistic portrait sketch module
+                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                sketch_path = convert_to_realistic_portrait_sketch(filepath, add_watermark=True)
             else:
                 # Default to artistic portrait sketch for best results
                 sketch_path = improved_sketch.convert_to_artistic_portrait_sketch(filepath, add_watermark=True)
@@ -361,6 +365,10 @@ def get_premium_sketch():
                 premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
             elif style == 'authentic-pencil':
                 premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'realistic-portrait':
+                # Import the realistic portrait sketch module
+                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                premium_path = convert_to_realistic_portrait_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
                 
@@ -432,6 +440,10 @@ def download_premium_sketch(session_id):
                 premium_path = improved_sketch.convert_to_ultra_clear_sketch(original_path, add_watermark=False)
             elif style == 'authentic-pencil':
                 premium_path = improved_sketch.convert_to_authentic_pencil_sketch(original_path, add_watermark=False)
+            elif style == 'realistic-portrait':
+                # Import the realistic portrait sketch module
+                from realistic_portrait_sketch import convert_to_realistic_portrait_sketch
+                premium_path = convert_to_realistic_portrait_sketch(original_path, add_watermark=False)
             else:
                 premium_path = improved_sketch.convert_to_pencil_sketch(original_path, add_watermark=False)
                 
